@@ -1,6 +1,3 @@
-// lib/models/question.dart
-// import 'package:flutter/material.dart';
-
 enum QuestionType { automatic, text, checkbox, radio, information }
 
 class QuestionOption {

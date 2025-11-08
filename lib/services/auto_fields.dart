@@ -1,4 +1,3 @@
-// lib/services/auto_fields.dart
 import 'dart:math';
 import '../models/question.dart';
 
@@ -27,7 +26,8 @@ class AutoFields {
     'starttime': _computeStartTime,
     'swver': _computeSoftwareVersion,
     'subjid': _computeSubjId,
-    // Add more:
+    // Add more automatic variables here ...
+
     // 'subjid': (answers, q) => _generateSubjectId(answers, q),
   };
 
@@ -51,13 +51,15 @@ class AutoFields {
     return value;
   }
 
-  // ---------- Example handlers (customize per survey) ----------
+  // Automatic field handlers  - customize per survey
 
+  // starttime
   static String _computeStartTime(AnswerMap answers, Question q) {
-    // ISO local time; pick a format your backend expects
+    // ISO local time
     return DateTime.now().toIso8601String();
   }
 
+  // sodtware vers
   static String _computeSoftwareVersion(AnswerMap answers, Question q) {
     return swVer;
   }
@@ -73,10 +75,10 @@ class AutoFields {
     switch (q.fieldType.toLowerCase()) {
       case 'datetime':
         return DateTime.now().toIso8601String();
-      case 'integer':
-        return '0';
+      case 'date':
+        return DateTime.now().toIso8601String().split('T')[0];
       default:
-        return 'auto';
+        return '-9';
     }
   }
 }
