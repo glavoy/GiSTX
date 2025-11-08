@@ -126,20 +126,22 @@ class _QuestionViewState extends State<QuestionView> {
         ...q.options.map(
           (opt) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: RadioListTile<String>(
-              value: opt.value,
+            child: RadioGroup<String>(
               groupValue: _radioSelection,
-              title: Text(opt.label),
-              dense: true,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              tileColor: Colors.white,
               onChanged: (val) {
                 setState(() {
                   _radioSelection = val;
                   widget.answers[q.fieldName] = val;
                 });
               },
+              child: RadioListTile<String>(
+                value: opt.value,
+                title: Text(opt.label),
+                dense: true,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                tileColor: Colors.white,
+              ),
             ),
           ),
         ),

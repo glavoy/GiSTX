@@ -61,16 +61,4 @@ class SurveyLoader {
       return val.toString();
     });
   }
-
-  // /// Dummy automatic values for now.
-  // static String dummyAutomaticValue(String fieldType) {
-  //   switch (fieldType.toLowerCase()) {
-  //     case 'datetime':
-  //       return DateTime.now().toIso8601String();
-  //     case 'integer':
-  //       return '1';
-  //     default:
-  //       return 'auto';
-  //   }
-  // }
 }
