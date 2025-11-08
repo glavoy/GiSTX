@@ -1,3 +1,3 @@
 # GiSTX
 
-GiST - Cross platform
+X-platform GiST
