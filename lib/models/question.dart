@@ -1,4 +1,4 @@
-enum QuestionType { automatic, text, checkbox, radio, information }
+enum QuestionType { automatic, text, checkbox, radio, information, date, combobox, datetime }
 
 class QuestionOption {
   final String value;
@@ -39,6 +39,12 @@ QuestionType parseQuestionType(String raw) {
       return QuestionType.radio;
     case 'information':
       return QuestionType.information;
+    case 'date':
+      return QuestionType.date;
+    case 'combobox':
+      return QuestionType.combobox;
+    case 'datetime':
+      return QuestionType.datetime;
     default:
       return QuestionType.information;
   }

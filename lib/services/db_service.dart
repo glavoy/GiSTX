@@ -1,359 +1,245 @@
 // lib/services/db_service.dart
-import 'dart:convert';
 import 'dart:io';
-import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-// import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:xml/xml.dart';
 
 import '../models/question.dart';
-import 'survey_loader.dart';
+import '../config/app_config.dart';
 
 class DbService {
   static Database? _db;
+  static String? _dbPath;
 
   /// Call once at app start
   static Future<void> init() async {
-    // Windows / desktop via FFI
-    if (!kIsWeb &&
-        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
-    }
-    final dir = await getApplicationSupportDirectory();
-    final dbPath = p.join(dir.path, 'gistx.sqlite');
-    _db = await openDatabase(
-      dbPath,
-      version: 1,
-      onCreate: (db, _) async => _createSchema(db),
-    );
-  }
-
-  static Future<void> _createSchema(Database db) async {
-    await db.execute('''
-      CREATE TABLE surveys(
-        id TEXT PRIMARY KEY,          -- e.g. filename (or a generated ID)
-        filename TEXT NOT NULL UNIQUE,
-        title TEXT,
-        xml_hash TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE questions(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        survey_id TEXT NOT NULL,
-        fieldname TEXT NOT NULL,
-        qtype TEXT NOT NULL,
-        fieldtype TEXT NOT NULL,
-        text TEXT,
-        position INTEGER NOT NULL,
-        UNIQUE(survey_id, fieldname),
-        FOREIGN KEY(survey_id) REFERENCES surveys(id) ON DELETE CASCADE
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE options(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        question_id INTEGER NOT NULL,
-        value TEXT NOT NULL,
-        label TEXT NOT NULL,
-        position INTEGER NOT NULL,
-        UNIQUE(question_id, value),
-        FOREIGN KEY(question_id) REFERENCES questions(id) ON DELETE CASCADE
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE interviews(
-        id TEXT PRIMARY KEY,          -- your uniqueid GUID
-        survey_id TEXT NOT NULL,
-        starttime TEXT,
-        stoptime TEXT,
-        lastmod TEXT NOT NULL,
-        FOREIGN KEY(survey_id) REFERENCES surveys(id)
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE answers(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        interview_id TEXT NOT NULL,
-        question_id INTEGER NOT NULL,
-        -- store one of these, depending on type:
-        value_text TEXT,    -- text/radio/automatic
-        value_json TEXT,    -- checkbox list as JSON
-        UNIQUE(interview_id, question_id),
-        FOREIGN KEY(interview_id) REFERENCES interviews(id) ON DELETE CASCADE,
-        FOREIGN KEY(question_id) REFERENCES questions(id) ON DELETE CASCADE
-      )
-    ''');
-  }
-
-  /// Scan assets/surveys/*.xml, register/refresh surveys+questions+options.
-  static Future<List<_ParsedSurvey>> syncSurveysFromAssets() async {
-    final manifest = await rootBundle.loadString('AssetManifest.json');
-    final Map<String, dynamic> files = json.decode(manifest);
-    final paths = files.keys
-        .where((k) =>
-            k.startsWith('assets/surveys/') && k.toLowerCase().endsWith('.xml'))
-        .toList()
-      ..sort();
-
-    final result = <_ParsedSurvey>[];
-
-    for (final path in paths) {
-      final xmlStr = await rootBundle.loadString(path);
-      final hash = sha256.convert(utf8.encode(xmlStr)).toString();
-
-      final id = path; // use asset path as survey_id (stable/unique)
-      final nowIso = DateTime.now().toIso8601String();
-
-      // Check if survey exists and hash matches
-      final existing =
-          await _db!.query('surveys', where: 'id=?', whereArgs: [id], limit: 1);
-      if (existing.isEmpty) {
-        await _db!.insert('surveys', {
-          'id': id,
-          'filename': p.basename(path),
-          'title': _inferTitleFromXml(xmlStr),
-          'xml_hash': hash,
-          'created_at': nowIso,
-          'updated_at': nowIso,
-        });
-        await _upsertQuestionsAndOptions(id, xmlStr);
-      } else {
-        final row = existing.first;
-        if (row['xml_hash'] != hash) {
-          // XML changed → refresh questions/options
-          await _db!.update('surveys', {'xml_hash': hash, 'updated_at': nowIso},
-              where: 'id=?', whereArgs: [id]);
-          await _refreshQuestionsAndOptions(id, xmlStr);
-        }
-      }
-
-      // Parse with the same loader you already use for UI
-      final questions = await SurveyLoader.loadFromAsset(path);
-      result.add(_ParsedSurvey(
-          id: id, filename: p.basename(path), questions: questions));
-    }
-
-    return result;
-  }
-
-  static String _inferTitleFromXml(String xmlStr) {
-    // Optional: try to read <title>…</title> if present; fallback to empty
     try {
-      final doc = XmlDocument.parse(xmlStr);
-      final title = doc
-          .findAllElements('title')
-          .map((e) => e.innerText.trim())
-          .firstWhere(
-            (t) => t.isNotEmpty,
-            orElse: () => '',
-          );
-      return title;
-    } catch (_) {
-      return '';
-    }
-  }
+      // Windows / desktop via FFI
+      if (!kIsWeb &&
+          (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        sqfliteFfiInit();
+        databaseFactory = databaseFactoryFfi;
+      }
 
-  static Future<void> _upsertQuestionsAndOptions(
-      String surveyId, String xmlStr) async {
-    final doc = XmlDocument.parse(xmlStr);
-    final questions = doc.findAllElements('question').toList();
-
-    int pos = 0;
-    for (final q in questions) {
-      final fieldname = q.getAttribute('fieldname') ?? '';
-      final qtype = (q.getAttribute('type') ?? '').toLowerCase();
-      final fieldtype = (q.getAttribute('fieldtype') ?? '').toLowerCase();
-      final text = q.getElement('text')?.innerText.trim() ?? '';
-
-      // Upsert question by (survey_id, fieldname)
-      final existing = await _db!.query(
-        'questions',
-        where: 'survey_id=? AND fieldname=?',
-        whereArgs: [surveyId, fieldname],
-        limit: 1,
-      );
-
-      int qid;
-      if (existing.isEmpty) {
-        qid = await _db!.insert('questions', {
-          'survey_id': surveyId,
-          'fieldname': fieldname,
-          'qtype': qtype,
-          'fieldtype': fieldtype,
-          'text': text,
-          'position': pos,
-        });
+      // Determine database path
+      if (AppConfig.customDatabasePath != null) {
+        _dbPath = AppConfig.customDatabasePath;
+        _log('Using custom database path: $_dbPath');
       } else {
-        qid = existing.first['id'] as int;
-        await _db!.update(
-          'questions',
-          {
-            'qtype': qtype,
-            'fieldtype': fieldtype,
-            'text': text,
-            'position': pos
-          },
-          where: 'id=?',
-          whereArgs: [qid],
-        );
+        final dir = await getApplicationSupportDirectory();
+        _dbPath = p.join(dir.path, AppConfig.databaseFilename);
+        _log('Using default database path: $_dbPath');
       }
 
-      // Options (if any)
-      final responses = q.getElement('responses');
-      int optPos = 0;
-      if (responses != null) {
-        for (final r in responses.findElements('response')) {
-          final value = r.getAttribute('value') ?? '';
-          final label = r.innerText.trim();
-
-          final optRow = await _db!.query(
-            'options',
-            where: 'question_id=? AND value=?',
-            whereArgs: [qid, value],
-            limit: 1,
-          );
-          if (optRow.isEmpty) {
-            await _db!.insert('options', {
-              'question_id': qid,
-              'value': value,
-              'label': label,
-              'position': optPos,
-            });
-          } else {
-            await _db!.update(
-              'options',
-              {'label': label, 'position': optPos},
-              where: 'id=?',
-              whereArgs: [optRow.first['id']],
-            );
-          }
-          optPos++;
-        }
-        // Note: we don't delete removed options here; add if you want strict sync.
+      // Check if database file exists
+      final dbFile = File(_dbPath!);
+      if (!dbFile.existsSync()) {
+        final errorMsg =
+            'Database file not found at: $_dbPath\n\nThe database must be created by your external application before running surveys.';
+        _logError(errorMsg);
+        throw DatabaseException(errorMsg);
       }
 
-      pos++;
+      // Open the database
+      _db = await openDatabase(_dbPath!, version: 1);
+      _log('Database opened successfully: $_dbPath');
+    } catch (e) {
+      _logError('Failed to initialize database: $e');
+      rethrow;
     }
   }
 
-  static Future<void> _refreshQuestionsAndOptions(
-      String surveyId, String xmlStr) async {
-    // Simple approach: delete and reinsert everything for that survey’s structure
-    await _db!.delete('options',
-        where: 'question_id IN (SELECT id FROM questions WHERE survey_id=?)',
-        whereArgs: [surveyId]);
-    await _db!.delete('questions', where: 'survey_id=?', whereArgs: [surveyId]);
-    await _upsertQuestionsAndOptions(surveyId, xmlStr);
-  }
+  /// Get the current database path
+  static String? get databasePath => _dbPath;
 
-  /// Save one completed interview’s answers.
-  /// - `surveyId`: the asset path id we stored in `surveys.id`
+  /// Save one completed interview's answers to the survey-specific table.
+  /// The table name is derived from the survey XML filename (without .xml extension).
+  /// Each table has columns matching the fieldnames from the XML (except 'information' type fields).
+  ///
+  /// - `surveyFilename`: the XML filename (e.g., 'survey.xml')
   /// - `answers`: your in-memory AnswerMap (fieldname -> value)
-  /// - `questions`: the parsed questions (to map fieldname -> question_id)
+  /// - `questions`: the parsed questions (to know which fields to save and their types)
   static Future<void> saveInterview({
-    required String surveyId,
+    required String surveyFilename,
     required AnswerMap answers,
     required List<Question> questions,
   }) async {
-    final db = _db!;
-    final batch = db.batch();
-
-    // Interview row
-    final uniqueId = (answers['uniqueid'] ?? '').toString();
-    if (uniqueId.isEmpty) {
-      throw StateError('uniqueid (GUID) is required for interview saving.');
+    if (_db == null) {
+      throw DatabaseException(
+          'Database not initialized. Call DbService.init() first.');
     }
 
-    // Optional convenience: extract automatic timestamps if present in answers
-    final starttime = answers['starttime']?.toString();
-    final stoptime = answers['stoptime']?.toString();
-    final lastmod = DateTime.now().toIso8601String();
+    final db = _db!;
 
-    // upsert interview
-    batch.insert(
-      'interviews',
-      {
-        'id': uniqueId,
-        'survey_id': surveyId,
-        'starttime': starttime,
-        'stoptime': stoptime,
-        'lastmod': lastmod,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    // Derive table name from filename: remove .xml extension
+    final tableName = surveyFilename.toLowerCase().replaceAll('.xml', '');
 
-    // Build a map fieldname -> question_id
-    final rows = await db.query('questions',
-        columns: ['id', 'fieldname'],
-        where: 'survey_id=?',
-        whereArgs: [surveyId]);
-    final qidByField = {
-      for (final r in rows) r['fieldname'] as String: r['id'] as int
-    };
-
-    // One answer row per question that has an answer
-    for (final q in questions) {
-      final val = answers[q.fieldName];
-      if (val == null) continue;
-
-      final qid = qidByField[q.fieldName];
-      if (qid == null) continue; // should not happen if sync ran
-
-      String? valueText;
-      String? valueJson;
-
-      switch (q.type) {
-        case QuestionType.checkbox:
-          // store as JSON array
-          final list = (val is List)
-              ? val.map((e) => e.toString()).toList()
-              : <String>[];
-          valueJson = jsonEncode(list);
-          break;
-        default:
-          valueText = val.toString();
-          break;
+    try {
+      // Check if table exists first
+      final tableExists = await _tableExists(tableName);
+      if (!tableExists) {
+        final errorMsg =
+            'Table "$tableName" does not exist in database.\n\nExpected table name: $tableName\nDatabase path: $_dbPath\n\nPlease create this table using your external application before conducting surveys.';
+        _logError(errorMsg);
+        throw DatabaseException(errorMsg);
       }
 
-      batch.insert(
-        'answers',
-        {
-          'interview_id': uniqueId,
-          'question_id': qid,
-          'value_text': valueText,
-          'value_json': valueJson,
-        },
+      // Build the column:value map, excluding information type questions
+      final Map<String, dynamic> rowData = {};
+
+      for (final q in questions) {
+        // Skip information questions - they don't get stored in the database
+        if (q.type == QuestionType.information) continue;
+
+        final val = answers[q.fieldName];
+        if (val == null) continue;
+
+        // Store the value based on the question type
+        switch (q.type) {
+          case QuestionType.checkbox:
+            // Store checkbox as comma-separated values
+            final list = (val is List)
+                ? val.map((e) => e.toString()).toList()
+                : <String>[];
+            rowData[q.fieldName] = list.join(',');
+            break;
+
+          case QuestionType.date:
+            // Store date as ISO8601 string (YYYY-MM-DD)
+            if (val is DateTime) {
+              rowData[q.fieldName] = val.toIso8601String().split('T')[0];
+            } else {
+              rowData[q.fieldName] = val.toString();
+            }
+            break;
+
+          case QuestionType.datetime:
+          case QuestionType.automatic:
+            // Store datetime/timestamp as ISO8601 string
+            if (val is DateTime) {
+              rowData[q.fieldName] = val.toIso8601String();
+            } else {
+              rowData[q.fieldName] = val.toString();
+            }
+            break;
+
+          default:
+            // For text, radio, combobox, etc., store as string
+            rowData[q.fieldName] = val.toString();
+            break;
+        }
+      }
+
+      // Get the uniqueid to use as primary key
+      final uniqueId = rowData['uniqueid']?.toString();
+      if (uniqueId == null || uniqueId.isEmpty) {
+        throw DatabaseException('uniqueid is required for interview saving.');
+      }
+
+      _log(
+          'Saving interview to table "$tableName" with uniqueid: $uniqueId');
+      _log('Row data: ${rowData.keys.join(', ')}');
+
+      // Insert or replace the row
+      await db.insert(
+        tableName,
+        rowData,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-    }
 
-    await batch.commit(noResult: true);
+      _log('Interview saved successfully to table "$tableName"');
+    } catch (e) {
+      final errorMsg =
+          'Failed to save interview to table "$tableName": $e\n\nDatabase: $_dbPath';
+      _logError(errorMsg);
+      throw DatabaseException(errorMsg);
+    }
   }
 
-  /// Convenience: return the first survey id (useful if you have a single survey)
+  /// Check if a table exists in the database
+  static Future<bool> _tableExists(String tableName) async {
+    if (_db == null) return false;
+
+    try {
+      final result = await _db!.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        [tableName],
+      );
+      return result.isNotEmpty;
+    } catch (e) {
+      _logError('Error checking if table exists: $e');
+      return false;
+    }
+  }
+
+  /// Public method to check if a table exists
+  static Future<bool> tableExists(String tableName) => _tableExists(tableName);
+
+  /// Get the list of all tables in the database
+  static Future<List<String>> getTables() async {
+    if (_db == null) {
+      throw DatabaseException('Database not initialized.');
+    }
+
+    try {
+      final result = await _db!.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+      );
+      return result.map((row) => row['name'] as String).toList();
+    } catch (e) {
+      _logError('Error getting table list: $e');
+      return [];
+    }
+  }
+
+  /// Get the column names for a specific table
+  static Future<List<String>> getTableColumns(String tableName) async {
+    if (_db == null) {
+      throw DatabaseException('Database not initialized.');
+    }
+
+    try {
+      final result = await _db!.rawQuery('PRAGMA table_info($tableName)');
+      return result.map((row) => row['name'] as String).toList();
+    } catch (e) {
+      _logError('Error getting columns for table $tableName: $e');
+      return [];
+    }
+  }
+
+  /// Convenience: return the first survey filename
   static Future<String?> firstSurveyId() async {
-    final rows = await _db!.query('surveys', orderBy: 'filename ASC', limit: 1);
-    if (rows.isEmpty) return null;
-    return rows.first['id'] as String;
+    return AppConfig.surveyFilename;
+  }
+
+  /// Close the database connection
+  static Future<void> close() async {
+    if (_db != null) {
+      await _db!.close();
+      _db = null;
+      _log('Database closed');
+    }
+  }
+
+  // Logging helpers
+  static void _log(String message) {
+    if (AppConfig.enableDebugLogging) {
+      debugPrint('[DbService] $message');
+    }
+  }
+
+  static void _logError(String message) {
+    debugPrint('[DbService ERROR] $message');
   }
 }
 
-class _ParsedSurvey {
-  final String id; // surveys.id (asset path)
-  final String filename;
-  final List<Question> questions;
-  _ParsedSurvey(
-      {required this.id, required this.filename, required this.questions});
+/// Custom exception for database errors
+class DatabaseException implements Exception {
+  final String message;
+
+  DatabaseException(this.message);
+
+  @override
+  String toString() => message;
 }

@@ -6,57 +6,103 @@
 	</question>
 
 
-	<question type = 'text' fieldname = 'interviewerid' fieldtype = 'text_integer'>
-		<text>Enter your Interviewer ID</text>
-		<maxCharacters>3</maxCharacters>
-		<numeric_check>
-			<values minvalue ='1' maxvalue='99' other_values = '1' message = 'Number must be between 1 and 99!'></values>
-		</numeric_check>
-	</question>
-
-
-	<question type = 'text' fieldname = 'subjid' fieldtype = 'text_integer'>
-		<text>Subject ID</text>
+	<question type = 'text' fieldname = 'subjid' fieldtype = 'text'>
+		<text>Enter the participants Subject ID</text>
 		<maxCharacters>10</maxCharacters>
 	</question>
 
 
-	<question type = 'radio' fieldname = 'comfort_smartphone' fieldtype = 'integer'>
-		<text>I can use the CHT app on my smartphone on my own (without asking for help from someone else).</text>
+	<question type = 'text' fieldname = 'tabletnum' fieldtype = 'text_integer'>
+		<text>Please enter the tablet/phone number of the tablet you are using</text>
+		<maxCharacters>2</maxCharacters>
+		<numeric_check>
+			<values minvalue ='1' maxvalue='75' other_values = '1' message = 'Number must be between 1 and 75!'></values>
+		</numeric_check>
+	</question>
+
+
+	<question type = 'text' fieldname = 'tabletnum2' fieldtype = 'text_integer'>
+		<text>Please re- enter the tablet/phone number of the tablet you are using</text>
+		<maxCharacters>2</maxCharacters>
+		<numeric_check>
+			<values minvalue ='1' maxvalue='75' other_values = '1' message = 'Number must be between 1 and 75!'></values>
+		</numeric_check>
+		<logic_check>
+			<logic fieldname='tabletnum2' condition = '&lt;&gt;' response = 'tabletnum' response_type = 'dynamic' condition2 = '=' currentresponse = '1' message = 'This does not match your previous entry!'></logic>
+		</logic_check>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'sex' fieldtype = 'integer'>
+		<text>Participants Sex</text>
 		<responses>
-			<response value = '1'>Strongly disagree</response>
-			<response value = '2'>Somewhat Disagree</response>
-			<response value = '3'>Neutral (Neither agree nor disagree)</response>
-			<response value = '4'>Somewhat Agree</response>
-			<response value = '5'>Strongly Agree</response>
+			<response value = '1'>Male</response>
+			<response value = '2'>Female</response>
 		</responses>
 	</question>
 
 
-  <question type = 'checkbox' fieldname = 'smartphone_features' fieldtype = 'text'>
-    <text>Which of the following smartphone features do you use regularly? (Select all that apply)</text>
-    <responses>
-      <response value = '1'>Making phone calls</response>
-      <response value = '2'>Sending text messages</response>
-      <response value = '3'>Using mobile apps</response>
-      <response value = '4'>Browsing the internet</response>
-      <response value = '5'>Taking photos or videos</response>
-      <response value = '6'>Using social media</response>
-      <response value = '7'>Listening to music or podcasts</response>
-      <response value = '8'>Other (please specify in comments)</response>
-    </responses>
+	<question type = 'radio' fieldname = 'pregnant' fieldtype = 'integer'>
+		<text>Is participant pregnant</text>
+		<responses>
+			<response value = '0'>No</response>
+			<response value = '1'>Yes</response>
+		</responses>
+		<preskip>
+			<skip fieldname='sex' condition = '=' response='1' response_type='fixed' skiptofieldname ='village'></skip>
+		</preskip>
+		<dont_know>-7</dont_know>
+		<refuse>-8</refuse>
 	</question>
 
 
-	<question type = 'text' fieldname = 'comments' fieldtype = 'text'>
-		<text>Any additional comments (optional)</text>
-		<maxCharacters>255</maxCharacters>
+	<question type = 'date' fieldname = 'pregnant_date' fieldtype = 'date'>
+		<text>Enter the date you found out you were pregnant</text>
+		<na>-6</na>
+	</question>
+
+
+	<question type = 'combobox' fieldname = 'village' fieldtype = 'integer'>
+		<text>Select the village</text>
+		<responses>
+			<response value = '1'>Kampala</response>
+			<response value = '2'>Mbarara</response>
+			<response value = '3'>Apac</response>
+			<response value = '4'>Other</response>
+		</responses>
+		<postskip>
+			<skip fieldname='village' condition = '&lt;&gt;' response='4' response_type='fixed' skiptofieldname ='info1'></skip>
+		</postskip>
+	</question>
+
+
+	<question type = 'text' fieldname = 'village_other' fieldtype = 'text'>
+		<text>Specify other village</text>
+		<maxCharacters>80</maxCharacters>
+	</question>
+
+
+	<question type = 'information' fieldname = 'info1' fieldtype = 'n/a'>
+		<text>Please record this tablet number:
+
+[[tabletnum]]</text>
+	</question>
+
+
+	<question type = 'checkbox' fieldname = 'prep_pep_type' fieldtype = 'text'>
+		<text>What medication(s) have you taken?</text>
+		<responses>
+			<response value = '1'>Oral PrEP</response>
+			<response value = '2'>Injectable PrEP (CAB-LA)</response>
+			<response value = '3'>PrEP vaginal ring</response>
+			<response value = '4'>PEP</response>
+		</responses>
+		<refuse>-8</refuse>
 		<na>-6</na>
 	</question>
 
 
 	<question type = 'automatic' fieldname = 'uniqueid' fieldtype = 'text'>
-		<maxCharacters>36</maxCharacters>
 	</question>
 
 
@@ -64,11 +110,11 @@
 	</question>
 
 
-	<question type = 'automatic' fieldname = 'stoptime' fieldtype = 'datetime'>
+	<question type = 'automatic' fieldname = 'lastmod' fieldtype = 'datetime'>
 	</question>
 
 
-	<question type = 'automatic' fieldname = 'lastmod' fieldtype = 'datetime'>
+	<question type = 'automatic' fieldname = 'stoptime' fieldtype = 'datetime'>
 	</question>
 
 

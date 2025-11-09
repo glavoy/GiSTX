@@ -22,6 +22,9 @@ class _QuestionViewState extends State<QuestionView> {
   late TextEditingController _textController;
   late Set<String> _checkboxSelection;
   String? _radioSelection;
+  String? _comboboxSelection;
+  DateTime? _selectedDate;
+  DateTime? _selectedDateTime;
 
   @override
   void initState() {
@@ -40,9 +43,29 @@ class _QuestionViewState extends State<QuestionView> {
     };
 
     _radioSelection = (existing is String) ? existing : null;
+    _comboboxSelection = (existing is String) ? existing : null;
+
+    // Handle date/datetime initialization
+    if (existing is DateTime) {
+      _selectedDate = existing;
+      _selectedDateTime = existing;
+    } else if (existing is String && existing.isNotEmpty) {
+      try {
+        final parsed = DateTime.parse(existing);
+        _selectedDate = parsed;
+        _selectedDateTime = parsed;
+      } catch (_) {
+        // Not a valid date string
+      }
+    }
 
     // Centralized automatic variable calculation
     if (q.type == QuestionType.automatic && existing == null) {
+      final v = AutoFields.compute(widget.answers, q);
+      widget.answers[q.fieldName] = v;
+    }
+    // Also handle datetime type automatic fields
+    if (q.type == QuestionType.datetime && existing == null) {
       final v = AutoFields.compute(widget.answers, q);
       widget.answers[q.fieldName] = v;
     }
@@ -56,11 +79,29 @@ class _QuestionViewState extends State<QuestionView> {
       final existing = widget.answers[widget.question.fieldName];
       // Reset text field
       _textController.text = (existing is String) ? existing : '';
-      // Reset radio/checkbox selections
+      // Reset radio/checkbox/combobox selections
       _radioSelection = (existing is String) ? existing : null;
+      _comboboxSelection = (existing is String) ? existing : null;
       _checkboxSelection = {
         if (existing is List) ...existing.map((e) => e.toString()),
       };
+      // Reset date/datetime
+      if (existing is DateTime) {
+        _selectedDate = existing;
+        _selectedDateTime = existing;
+      } else if (existing is String && existing.isNotEmpty) {
+        try {
+          final parsed = DateTime.parse(existing);
+          _selectedDate = parsed;
+          _selectedDateTime = parsed;
+        } catch (_) {
+          _selectedDate = null;
+          _selectedDateTime = null;
+        }
+      } else {
+        _selectedDate = null;
+        _selectedDateTime = null;
+      }
       setState(() {}); // ensure rebuild
     }
   }
@@ -191,6 +232,154 @@ class _QuestionViewState extends State<QuestionView> {
     );
   }
 
+  Widget _buildCombobox(Question q) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: DropdownButton<String>(
+            value: _comboboxSelection,
+            hint: const Text('Select an option'),
+            isExpanded: true,
+            underline: const SizedBox(),
+            items: q.options.map((opt) {
+              return DropdownMenuItem<String>(
+                value: opt.value,
+                child: Text(opt.label),
+              );
+            }).toList(),
+            onChanged: (val) {
+              setState(() {
+                _comboboxSelection = val;
+                widget.answers[q.fieldName] = val;
+                AutoFields.touchLastMod(widget.answers);
+              });
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDate(Question q) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        InkWell(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _selectedDate ?? DateTime.now(),
+              firstDate: DateTime(1900),
+              lastDate: DateTime(2100),
+            );
+            if (picked != null) {
+              setState(() {
+                _selectedDate = picked;
+                widget.answers[q.fieldName] = picked;
+                AutoFields.touchLastMod(widget.answers);
+              });
+            }
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _selectedDate != null
+                      ? '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}'
+                      : 'Select a date',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: _selectedDate != null ? Colors.black : Colors.grey,
+                  ),
+                ),
+                Icon(Icons.calendar_today, color: Colors.grey.shade600),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDateTime(Question q) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        InkWell(
+          onTap: () async {
+            final pickedDate = await showDatePicker(
+              context: context,
+              initialDate: _selectedDateTime ?? DateTime.now(),
+              firstDate: DateTime(1900),
+              lastDate: DateTime(2100),
+            );
+            if (pickedDate != null) {
+              final pickedTime = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay.fromDateTime(
+                    _selectedDateTime ?? DateTime.now()),
+              );
+              if (pickedTime != null) {
+                final combined = DateTime(
+                  pickedDate.year,
+                  pickedDate.month,
+                  pickedDate.day,
+                  pickedTime.hour,
+                  pickedTime.minute,
+                );
+                setState(() {
+                  _selectedDateTime = combined;
+                  widget.answers[q.fieldName] = combined;
+                  AutoFields.touchLastMod(widget.answers);
+                });
+              }
+            }
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _selectedDateTime != null
+                      ? '${_selectedDateTime!.year}-${_selectedDateTime!.month.toString().padLeft(2, '0')}-${_selectedDateTime!.day.toString().padLeft(2, '0')} ${_selectedDateTime!.hour.toString().padLeft(2, '0')}:${_selectedDateTime!.minute.toString().padLeft(2, '0')}'
+                      : 'Select date and time',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color:
+                        _selectedDateTime != null ? Colors.black : Colors.grey,
+                  ),
+                ),
+                Icon(Icons.calendar_today, color: Colors.grey.shade600),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final q = widget.question;
@@ -222,6 +411,12 @@ class _QuestionViewState extends State<QuestionView> {
         return _buildRadio(q);
       case QuestionType.checkbox:
         return _buildCheckbox(q);
+      case QuestionType.combobox:
+        return _buildCombobox(q);
+      case QuestionType.date:
+        return _buildDate(q);
+      case QuestionType.datetime:
+        return _buildDateTime(q);
     }
   }
 }
