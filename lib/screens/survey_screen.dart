@@ -3,6 +3,7 @@ import '../models/question.dart';
 import '../services/survey_loader.dart';
 import '../widgets/question_views.dart';
 import '../services/db_service.dart';
+import '../config/app_config.dart';
 
 class SurveyScreen extends StatefulWidget {
   const SurveyScreen({super.key});
@@ -17,23 +18,20 @@ class _SurveyScreenState extends State<SurveyScreen> {
   late Future<List<Question>> _futureSurvey = _loadSurvey();
 
   Future<List<Question>> _loadSurvey() async {
-    // 1) init DB
-    await DbService.init();
+    try {
+      // 1) init DB
+      await DbService.init();
 
-    // 2) sync all surveys from assets/surveys/
-    final parsed = await DbService.syncSurveysFromAssets();
-
-    // For now, pick the first survey (you can add a picker later)
-    final surveyId = await DbService.firstSurveyId();
-    if (surveyId == null) {
-      throw Exception('No surveys found in assets/surveys/');
+      // 2) load questions for UI from the survey XML
+      // The database tables are pre-created by another app, so we just load the XML
+      return SurveyLoader.loadFromAsset(AppConfig.surveyAssetPath);
+    } catch (e) {
+      // If database initialization fails, still allow viewing the survey
+      // but warn the user
+      debugPrint('Warning: Database initialization failed: $e');
+      debugPrint('Survey will load but data cannot be saved.');
+      return SurveyLoader.loadFromAsset(AppConfig.surveyAssetPath);
     }
-
-    // 3) also load questions for UI using your existing loader
-    return SurveyLoader.loadFromAsset(
-        parsed.first.filename.startsWith('assets/')
-            ? parsed.first.filename
-            : 'assets/surveys/${parsed.first.filename}');
   }
 
   void _next(List<Question> qs) {
@@ -239,38 +237,109 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
   void _showDone(BuildContext context) async {
     final questions = await _futureSurvey; // already loaded
-    final surveyId = await DbService.firstSurveyId();
-    if (surveyId == null) return;
+    final surveyFilename = await DbService.firstSurveyId();
+    if (surveyFilename == null) return;
+
+    bool saveSuccessful = false;
+    String? errorMessage;
 
     try {
       await DbService.saveInterview(
-        surveyId: surveyId,
+        surveyFilename: surveyFilename,
         answers: _answers,
         questions: questions,
       );
+      saveSuccessful = true;
     } catch (e) {
-      // surface error if uniqueid missing, etc.
+      // Capture the error to show in dialog
+      errorMessage = e.toString();
       debugPrint('Save failed: $e');
     }
 
     if (!mounted) return;
 
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('All done!'),
-        content: Text(
-            'Thanks. Answers saved to SQLite.\nInterview: ${_answers['uniqueid']}'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(); // Close dialog
-              Navigator.of(context).pop(); // Return to main screen
-            },
-            child: const Text('OK'),
-          )
-        ],
-      ),
-    );
+    if (saveSuccessful) {
+      // Success dialog
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('All done!'),
+          content: Text(
+              'Thanks! Answers saved successfully.\n\nInterview ID: ${_answers['uniqueid']}\nDatabase: ${DbService.databasePath ?? 'Unknown'}'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+                Navigator.of(context).pop(); // Return to main screen
+              },
+              child: const Text('OK'),
+            )
+          ],
+        ),
+      );
+    } else {
+      // Error dialog
+      if (AppConfig.enableErrorDialogs) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red, size: 28),
+                SizedBox(width: 8),
+                Text('Save Failed'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Failed to save the interview data to the database.',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Error details:'),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      errorMessage ?? 'Unknown error',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Please check:\n'
+                    '• Database file exists at the configured path\n'
+                    '• Table name matches the survey filename\n'
+                    '• All required columns exist in the table',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close dialog
+                  Navigator.of(context).pop(); // Return to main screen
+                },
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 }

@@ -1,8 +1,7 @@
 // import 'dart:math';
 import '../models/question.dart';
+import '../config/app_config.dart';
 import 'package:uuid/uuid.dart';
-
-const swVer = "0.0.3";
 
 /// This is the ONLY file a programmer edits for automatic variables.
 /// Add/edit entries in [_registry] to support new automatic fields.
@@ -26,7 +25,7 @@ class AutoFields {
     'uniqueid': _computeUniqueId,
     'starttime': _computeStartTime,
     'stoptime': _computeStopTime,
-    // 'lastmod': _computeLastModified,
+    'lastmod': _computeLastModified,
     'swver': _computeSoftwareVersion,
     // 'subjid': _computeSubjId,
     // Add more automatic variables here ...
@@ -64,8 +63,13 @@ class AutoFields {
     return DateTime.now().toIso8601String();
   }
 
+  static String _computeLastModified(AnswerMap answers, Question q) {
+    // Last modified timestamp - updates whenever any answer changes
+    return DateTime.now().toIso8601String();
+  }
+
   static String _computeSoftwareVersion(AnswerMap answers, Question q) {
-    return '1.0.0'; // replace later if you fetch from platform
+    return AppConfig.softwareVersion;
   }
 
   static String _computeUniqueId(AnswerMap answers, Question q) {
