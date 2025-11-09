@@ -36,6 +36,10 @@ class SurveyLoader {
         }
       }
 
+      // Parse skip conditions
+      final preSkips = _parseSkips(q.getElement('preskip'));
+      final postSkips = _parseSkips(q.getElement('postskip'));
+
       questions.add(
         Question(
           type: type,
@@ -44,10 +48,37 @@ class SurveyLoader {
           text: text,
           maxCharacters: maxChars,
           options: options,
+          preSkips: preSkips,
+          postSkips: postSkips,
         ),
       );
     }
     return questions;
+  }
+
+  /// Parse skip conditions from preskip or postskip element
+  static List<SkipCondition> _parseSkips(XmlElement? skipElement) {
+    if (skipElement == null) return [];
+
+    final skips = <SkipCondition>[];
+    for (final skipNode in skipElement.findElements('skip')) {
+      final fieldName = skipNode.getAttribute('fieldname') ?? '';
+      final condition = skipNode.getAttribute('condition') ?? '';
+      final response = skipNode.getAttribute('response') ?? '';
+      final responseType = skipNode.getAttribute('response_type') ?? 'fixed';
+      final skipToFieldName = skipNode.getAttribute('skiptofieldname') ?? '';
+
+      if (fieldName.isNotEmpty && skipToFieldName.isNotEmpty) {
+        skips.add(SkipCondition(
+          fieldName: fieldName,
+          condition: condition,
+          response: response,
+          responseType: responseType,
+          skipToFieldName: skipToFieldName,
+        ));
+      }
+    }
+    return skips;
   }
 
   /// Very simple placeholder expansion like "This is [[intid]]"
