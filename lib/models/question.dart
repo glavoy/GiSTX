@@ -6,6 +6,23 @@ class QuestionOption {
   QuestionOption({required this.value, required this.label});
 }
 
+/// Skip condition for navigating between questions
+class SkipCondition {
+  final String fieldName;        // Field to check (e.g., 'sex')
+  final String condition;        // Comparison operator (e.g., '=', '<>', '<', '>')
+  final String response;         // Value to compare against (e.g., '1')
+  final String responseType;     // 'fixed' or 'dynamic'
+  final String skipToFieldName;  // Target field to skip to (e.g., 'village')
+
+  SkipCondition({
+    required this.fieldName,
+    required this.condition,
+    required this.response,
+    required this.responseType,
+    required this.skipToFieldName,
+  });
+}
+
 class Question {
   final QuestionType type;
   final String fieldName;
@@ -13,6 +30,8 @@ class Question {
   final String? text;
   final int? maxCharacters;
   final List<QuestionOption> options;
+  final List<SkipCondition> preSkips;  // Evaluated before showing the question
+  final List<SkipCondition> postSkips; // Evaluated after user answers
 
   Question({
     required this.type,
@@ -21,6 +40,8 @@ class Question {
     this.text,
     this.maxCharacters,
     this.options = const [],
+    this.preSkips = const [],
+    this.postSkips = const [],
   });
 }
 

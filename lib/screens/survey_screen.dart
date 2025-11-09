@@ -3,6 +3,8 @@ import '../models/question.dart';
 import '../services/survey_loader.dart';
 import '../widgets/question_views.dart';
 import '../services/db_service.dart';
+import '../services/auto_fields.dart';
+import '../services/skip_service.dart';
 import '../config/app_config.dart';
 
 class SurveyScreen extends StatefulWidget {
@@ -14,8 +16,10 @@ class SurveyScreen extends StatefulWidget {
 
 class _SurveyScreenState extends State<SurveyScreen> {
   final AnswerMap _answers = {};
-  int _index = 0;
-  late Future<List<Question>> _futureSurvey = _loadSurvey();
+  int _currentQuestion = 0;
+  int _previousQuestion =
+      -1; // Track the last displayed (non-automatic) question
+  late Future<List<Question>> _questions = _loadSurvey();
 
   Future<List<Question>> _loadSurvey() async {
     try {
@@ -34,22 +38,149 @@ class _SurveyScreenState extends State<SurveyScreen> {
     }
   }
 
+  /// Navigate to the next question, auto-skipping automatic questions
+  /// Information questions ARE displayed to the user
   void _next(List<Question> qs) {
-    if (_index < qs.length - 1) {
-      setState(() => _index++);
+    if (_currentQuestion >= qs.length - 1) return;
+
+    // Store current question as previous (if it's not automatic)
+    // Information questions should be tracked as they are displayed
+    if (qs[_currentQuestion].type != QuestionType.automatic) {
+      _previousQuestion = _currentQuestion;
+    }
+
+    // Check for postskip conditions on the current question
+    final currentQ = qs[_currentQuestion];
+    final postSkipTarget = SkipService.evaluateSkips(currentQ.postSkips, _answers);
+
+    int nextIndex;
+    if (postSkipTarget != null) {
+      // Postskip condition met - find the target question
+      nextIndex = _findQuestionByFieldName(qs, postSkipTarget);
+      if (nextIndex == -1) {
+        // Target not found, go to next question normally
+        nextIndex = _currentQuestion + 1;
+      }
+    } else {
+      // No postskip, move to next question
+      nextIndex = _currentQuestion + 1;
+    }
+
+    // Skip automatic questions and evaluate preskips
+    nextIndex = _findNextDisplayedQuestion(qs, nextIndex);
+
+    setState(() {
+      _currentQuestion = nextIndex;
+    });
+  }
+
+  /// Find the next question that should be displayed
+  /// Handles automatic questions and preskip conditions
+  int _findNextDisplayedQuestion(List<Question> qs, int startIndex) {
+    int index = startIndex;
+
+    while (index < qs.length) {
+      final q = qs[index];
+
+      // Process and skip automatic questions
+      if (q.type == QuestionType.automatic) {
+        _processAutomaticQuestion(q);
+        index++;
+        continue;
+      }
+
+      // Check preskip conditions
+      final preSkipTarget = SkipService.evaluateSkips(q.preSkips, _answers);
+      if (preSkipTarget != null) {
+        // Preskip condition met - jump to target
+        final targetIndex = _findQuestionByFieldName(qs, preSkipTarget);
+        if (targetIndex != -1) {
+          index = targetIndex;
+          continue; // Re-evaluate the target question
+        }
+      }
+
+      // This question should be displayed
+      return index;
+    }
+
+    // Reached end of survey
+    return qs.length - 1;
+  }
+
+  /// Find a question by its fieldName
+  int _findQuestionByFieldName(List<Question> qs, String fieldName) {
+    for (int i = 0; i < qs.length; i++) {
+      if (qs[i].fieldName == fieldName) {
+        return i;
+      }
+    }
+    return -1; // Not found
+  }
+
+  /// Navigate to the previous displayed question
+  void _prev() {
+    if (_previousQuestion >= 0) {
+      setState(() {
+        _currentQuestion = _previousQuestion;
+        // Update _previousQuestion to the one before that
+        _previousQuestion = _findPreviousDisplayedQuestion(_currentQuestion);
+      });
     }
   }
 
-  void _prev() {
-    if (_index > 0) {
-      setState(() => _index--);
+  /// Find the previous question that should be displayed (not automatic questions)
+  int _findPreviousDisplayedQuestion(int fromIndex) {
+    // We track previous question as we navigate, so this is not needed
+    // Will return -1 if no previous question exists
+    return -1;
+  }
+
+  /// Process an automatic question by calculating its value
+  void _processAutomaticQuestion(Question q) {
+    // The automatic value calculation is already handled in QuestionView.initState
+    // But we can also do it here for automatic questions we skip over
+    if (_answers[q.fieldName] == null) {
+      final value = AutoFields.compute(_answers, q);
+      _answers[q.fieldName] = value;
     }
+  }
+
+  /// Skip to the first question that should be displayed (on initial load)
+  /// Only skips automatic questions, information questions are displayed
+  void _skipToFirstDisplayedQuestion(List<Question> questions) {
+    if (_currentQuestion == 0 && questions[0].type == QuestionType.automatic) {
+      // Process all automatic questions at the start
+      int index = 0;
+      while (index < questions.length &&
+          questions[index].type == QuestionType.automatic) {
+        _processAutomaticQuestion(questions[index]);
+        index++;
+      }
+
+      if (index < questions.length && index != _currentQuestion) {
+        setState(() {
+          _currentQuestion = index;
+        });
+      }
+    }
+  }
+
+  /// Check if there's a next question to display (not automatic)
+  /// Information questions ARE displayed
+  bool _hasNextDisplayedQuestion(List<Question> questions, int fromIndex) {
+    for (int i = fromIndex + 1; i < questions.length; i++) {
+      if (questions[i].type != QuestionType.automatic) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Question>>(
-      future: _futureSurvey,
+      future: _questions,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
           return const Scaffold(
@@ -60,10 +191,19 @@ class _SurveyScreenState extends State<SurveyScreen> {
         }
 
         final questions = snap.data!;
-        final q = questions[_index];
-        final isFirst = _index == 0;
-        final isLast = _index == questions.length - 1;
-        final progress = (_index + 1) / questions.length;
+
+        // Skip automatic and information questions on initial load
+        if (_currentQuestion == 0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _skipToFirstDisplayedQuestion(questions);
+          });
+        }
+
+        final q = questions[_currentQuestion];
+        final isFirst = _previousQuestion < 0;
+        final isLast = _currentQuestion == questions.length - 1 ||
+            !_hasNextDisplayedQuestion(questions, _currentQuestion);
+        final progress = (_currentQuestion + 1) / questions.length;
 
         return Scaffold(
           appBar: AppBar(
@@ -142,7 +282,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
                               Row(
                                 children: [
                                   Text(
-                                      'Step ${_index + 1} of ${questions.length}',
+                                      'Step ${_currentQuestion + 1} of ${questions.length}',
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleMedium),
@@ -236,7 +376,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
   }
 
   void _showDone(BuildContext context) async {
-    final questions = await _futureSurvey; // already loaded
+    final questions = await _questions; // already loaded
     final surveyFilename = await DbService.firstSurveyId();
     if (surveyFilename == null) return;
 
