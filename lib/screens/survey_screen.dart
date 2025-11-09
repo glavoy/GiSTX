@@ -50,7 +50,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
     // Check for postskip conditions on the current question
     final currentQ = qs[_currentQuestion];
-    final postSkipTarget = SkipService.evaluateSkips(currentQ.postSkips, _answers);
+    final postSkipTarget =
+        SkipService.evaluateSkips(currentQ.postSkips, _answers);
 
     int nextIndex;
     if (postSkipTarget != null) {
@@ -147,7 +148,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
   bool _isValid(Question q) {
     // For integer text fields, enforce numeric_check range
-    if (q.type == QuestionType.text && q.fieldType.toLowerCase().contains('integer')) {
+    if (q.type == QuestionType.text &&
+        q.fieldType.toLowerCase().contains('integer')) {
       final raw = _answers[q.fieldName]?.toString() ?? '';
       if (raw.isEmpty) return false;
       final parsed = int.tryParse(raw);
@@ -235,7 +237,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
         final q = questions[_currentQuestion];
         final isFirst = _history.isEmpty;
-        final canProceed = q.type == QuestionType.information || (_isAnswered(q) && _isValid(q));
+        final canProceed = q.type == QuestionType.information ||
+            (_isAnswered(q) && _isValid(q));
         final isLast = _currentQuestion == questions.length - 1 ||
             !_hasNextDisplayedQuestion(questions, _currentQuestion);
         final progress = (_currentQuestion + 1) / questions.length;
@@ -415,18 +418,13 @@ class _SurveyScreenState extends State<SurveyScreen> {
   }
 
   void _showDone(BuildContext context) async {
-    final questions = await _questions; // already loaded
-    final surveyFilename = await DbService.firstSurveyId();
-    if (surveyFilename == null) return;
-
     bool saveSuccessful = false;
     String? errorMessage;
 
     try {
       await DbService.saveInterview(
-        surveyFilename: surveyFilename,
+        surveyFilename: AppConfig.surveyFilename,
         answers: _answers,
-        questions: questions,
       );
       saveSuccessful = true;
     } catch (e) {
@@ -443,8 +441,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('All done!'),
-          content: Text(
-              'Thanks! Answers saved successfully.\n\nInterview ID: ${_answers['uniqueid']}\nDatabase: ${DbService.databasePath ?? 'Unknown'}'),
+          content: Text('Thanks! Answers saved successfully.'),
           actions: [
             TextButton(
               onPressed: () {

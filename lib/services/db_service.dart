@@ -1,5 +1,4 @@
 // lib/services/db_service.dart
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -10,40 +9,22 @@ import '../config/app_config.dart';
 
 class DbService {
   static Database? _db;
-  static String? _dbPath;
 
   /// Call once at app start
   static Future<void> init() async {
     try {
-      // Windows / desktop via FFI
-      if (!kIsWeb &&
-          (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-        sqfliteFfiInit();
-        databaseFactory = databaseFactoryFfi;
-      }
+      // Initialize FFI for desktop platforms
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
 
-      // Determine database path
-      if (AppConfig.customDatabasePath != null) {
-        _dbPath = AppConfig.customDatabasePath;
-        _log('Using custom database path: $_dbPath');
-      } else {
-        final dir = await getApplicationSupportDirectory();
-        _dbPath = p.join(dir.path, AppConfig.databaseFilename);
-        _log('Using default database path: $_dbPath');
-      }
+      // Set database path
+      final dbPath = AppConfig.customDatabasePath ??
+          p.join((await getApplicationSupportDirectory()).path,
+              AppConfig.databaseFilename);
+      _log('Using database path: $dbPath');
 
-      // Check if database file exists
-      final dbFile = File(_dbPath!);
-      if (!dbFile.existsSync()) {
-        final errorMsg =
-            'Database file not found at: $_dbPath\n\nThe database must be created by your external application before running surveys.';
-        _logError(errorMsg);
-        throw DatabaseException(errorMsg);
-      }
-
-      // Open the database
-      _db = await openDatabase(_dbPath!, version: 1);
-      _log('Database opened successfully: $_dbPath');
+      // Open the database (will fail if file doesn't exist)
+      _db = await openDatabase(dbPath);
     } catch (e) {
       _logError('Failed to initialize database: $e');
       rethrow;
@@ -51,25 +32,17 @@ class DbService {
   }
 
   /// Get the current database path
-  static String? get databasePath => _dbPath;
+  static String? get databasePath => _db?.path;
 
   /// Save one completed interview's answers to the survey-specific table.
   /// The table name is derived from the survey XML filename (without .xml extension).
-  /// Each table has columns matching the fieldnames from the XML (except 'information' type fields).
   ///
   /// - `surveyFilename`: the XML filename (e.g., 'survey.xml')
-  /// - `answers`: your in-memory AnswerMap (fieldname -> value)
-  /// - `questions`: the parsed questions (to know which fields to save and their types)
+  /// - `answers`: in-memory AnswerMap (fieldname -> value)
   static Future<void> saveInterview({
     required String surveyFilename,
     required AnswerMap answers,
-    required List<Question> questions,
   }) async {
-    if (_db == null) {
-      throw DatabaseException(
-          'Database not initialized. Call DbService.init() first.');
-    }
-
     final db = _db!;
 
     // Derive table name from filename: remove .xml extension
@@ -80,66 +53,32 @@ class DbService {
       final tableExists = await _tableExists(tableName);
       if (!tableExists) {
         final errorMsg =
-            'Table "$tableName" does not exist in database.\n\nExpected table name: $tableName\nDatabase path: $_dbPath\n\nPlease create this table using your external application before conducting surveys.';
+            'Table "$tableName" does not exist in database.\n\nExpected table name: $tableName\nDatabase path: ${databasePath}\n\nPlease create this table using your external application before conducting surveys.';
         _logError(errorMsg);
         throw DatabaseException(errorMsg);
       }
 
-      // Build the column:value map, excluding information type questions
+      // Build the column:value map from answers
+      // Convert special types to database-friendly formats
       final Map<String, dynamic> rowData = {};
 
-      for (final q in questions) {
-        // Skip information questions - they don't get stored in the database
-        if (q.type == QuestionType.information) continue;
-
-        final val = answers[q.fieldName];
+      for (final entry in answers.entries) {
+        final key = entry.key;
+        final val = entry.value;
         if (val == null) continue;
 
-        // Store the value based on the question type
-        switch (q.type) {
-          case QuestionType.checkbox:
-            // Store checkbox as comma-separated values
-            final list = (val is List)
-                ? val.map((e) => e.toString()).toList()
-                : <String>[];
-            rowData[q.fieldName] = list.join(',');
-            break;
-
-          case QuestionType.date:
-            // Store date as ISO8601 string (YYYY-MM-DD)
-            if (val is DateTime) {
-              rowData[q.fieldName] = val.toIso8601String().split('T')[0];
-            } else {
-              rowData[q.fieldName] = val.toString();
-            }
-            break;
-
-          case QuestionType.datetime:
-          case QuestionType.automatic:
-            // Store datetime/timestamp as ISO8601 string
-            if (val is DateTime) {
-              rowData[q.fieldName] = val.toIso8601String();
-            } else {
-              rowData[q.fieldName] = val.toString();
-            }
-            break;
-
-          default:
-            // For text, radio, combobox, etc., store as string
-            rowData[q.fieldName] = val.toString();
-            break;
+        // Store the value based on its runtime type
+        if (val is List) {
+          // Checkbox values - store as comma-separated
+          rowData[key] = val.map((e) => e.toString()).join(',');
+        } else if (val is DateTime) {
+          // DateTime values - store as ISO8601 string
+          rowData[key] = val.toIso8601String();
+        } else {
+          // Everything else (String, int, etc.) - store as-is
+          rowData[key] = val;
         }
       }
-
-      // Get the uniqueid to use as primary key
-      final uniqueId = rowData['uniqueid']?.toString();
-      if (uniqueId == null || uniqueId.isEmpty) {
-        throw DatabaseException('uniqueid is required for interview saving.');
-      }
-
-      _log(
-          'Saving interview to table "$tableName" with uniqueid: $uniqueId');
-      _log('Row data: ${rowData.keys.join(', ')}');
 
       // Insert or replace the row
       await db.insert(
@@ -147,11 +86,9 @@ class DbService {
         rowData,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-
-      _log('Interview saved successfully to table "$tableName"');
     } catch (e) {
       final errorMsg =
-          'Failed to save interview to table "$tableName": $e\n\nDatabase: $_dbPath';
+          'Failed to save interview to table "$tableName": $e\n\nDatabase: ${databasePath}';
       _logError(errorMsg);
       throw DatabaseException(errorMsg);
     }
@@ -170,55 +107,6 @@ class DbService {
     } catch (e) {
       _logError('Error checking if table exists: $e');
       return false;
-    }
-  }
-
-  /// Public method to check if a table exists
-  static Future<bool> tableExists(String tableName) => _tableExists(tableName);
-
-  /// Get the list of all tables in the database
-  static Future<List<String>> getTables() async {
-    if (_db == null) {
-      throw DatabaseException('Database not initialized.');
-    }
-
-    try {
-      final result = await _db!.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
-      );
-      return result.map((row) => row['name'] as String).toList();
-    } catch (e) {
-      _logError('Error getting table list: $e');
-      return [];
-    }
-  }
-
-  /// Get the column names for a specific table
-  static Future<List<String>> getTableColumns(String tableName) async {
-    if (_db == null) {
-      throw DatabaseException('Database not initialized.');
-    }
-
-    try {
-      final result = await _db!.rawQuery('PRAGMA table_info($tableName)');
-      return result.map((row) => row['name'] as String).toList();
-    } catch (e) {
-      _logError('Error getting columns for table $tableName: $e');
-      return [];
-    }
-  }
-
-  /// Convenience: return the first survey filename
-  static Future<String?> firstSurveyId() async {
-    return AppConfig.surveyFilename;
-  }
-
-  /// Close the database connection
-  static Future<void> close() async {
-    if (_db != null) {
-      await _db!.close();
-      _db = null;
-      _log('Database closed');
     }
   }
 
