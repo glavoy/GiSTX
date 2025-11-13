@@ -8,7 +8,16 @@ import '../services/skip_service.dart';
 import '../config/app_config.dart';
 
 class SurveyScreen extends StatefulWidget {
-  const SurveyScreen({super.key});
+  final Map<String, dynamic>? existingAnswers;
+  final String? uniqueId;
+  final List<String>? primaryKeyFields;
+
+  const SurveyScreen({
+    super.key,
+    this.existingAnswers,
+    this.uniqueId,
+    this.primaryKeyFields,
+  });
 
   @override
   State<SurveyScreen> createState() => _SurveyScreenState();
@@ -16,8 +25,10 @@ class SurveyScreen extends StatefulWidget {
 
 class _SurveyScreenState extends State<SurveyScreen> {
   final AnswerMap _answers = {};
+  AnswerMap? _originalAnswers; // Store original answers for change detection
   int _currentQuestion = 0;
   final List<int> _history = []; // Navigation history of displayed questions
+  final Set<String> _visitedFields = {}; // Track which questions were actually displayed
   late Future<List<Question>> _questions = _loadSurvey();
   bool _isSaving = false; // Flag to prevent multiple submissions
 
@@ -28,13 +39,154 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
       // 2) load questions for UI from the survey XML
       // The database tables are pre-created by another app, so we just load the XML
-      return SurveyLoader.loadFromAsset(AppConfig.surveyAssetPath);
+      final questions = await SurveyLoader.loadFromAsset(AppConfig.surveyAssetPath);
+
+      // 3) If we're editing an existing record, populate answers from the database
+      if (widget.existingAnswers != null) {
+        _populateAnswersFromRecord(widget.existingAnswers!, questions);
+        debugPrint('Primary key fields: ${widget.primaryKeyFields}');
+      }
+
+      return questions;
     } catch (e) {
       // If database initialization fails, still allow viewing the survey
       // but warn the user
       debugPrint('Warning: Database initialization failed: $e');
       debugPrint('Survey will load but data cannot be saved.');
       return SurveyLoader.loadFromAsset(AppConfig.surveyAssetPath);
+    }
+  }
+
+  /// Populate the answers map from an existing database record
+  void _populateAnswersFromRecord(Map<String, dynamic> record, List<Question> questions) {
+    // Build a map of field names to question types for quick lookup
+    final questionTypes = <String, QuestionType>{};
+    for (final q in questions) {
+      questionTypes[q.fieldName] = q.type;
+    }
+
+    for (final entry in record.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      if (value == null) continue;
+
+      // Convert database values back to their proper types
+      // First convert to string for consistent handling
+      final stringValue = value.toString();
+
+      // Check if this field is a checkbox type
+      final questionType = questionTypes[key];
+      if (questionType == QuestionType.checkbox) {
+        // For checkbox, always convert to List (even single values)
+        if (stringValue.contains(',')) {
+          // Multiple values: "3,4"
+          final list = stringValue.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+          _answers[key] = list;
+          debugPrint('Loaded checkbox field "$key": $list (type: ${list.runtimeType})');
+        } else if (stringValue.trim().isNotEmpty) {
+          // Single value: "2"
+          _answers[key] = [stringValue.trim()];
+          debugPrint('Loaded checkbox field "$key": [${stringValue.trim()}] (type: ${_answers[key].runtimeType})');
+        }
+      } else if (stringValue.contains('T') && stringValue.length > 10) {
+        // Likely an ISO8601 datetime string
+        try {
+          _answers[key] = DateTime.parse(stringValue);
+        } catch (e) {
+          // If parsing fails, just store as string
+          _answers[key] = stringValue;
+        }
+      } else {
+        // Store as string (works for radio, combobox, text fields)
+        _answers[key] = stringValue;
+      }
+    }
+
+    // Store a deep copy of the original answers for change detection
+    _originalAnswers = _deepCopyAnswers(_answers);
+  }
+
+  /// Create a deep copy of the answers map
+  AnswerMap _deepCopyAnswers(AnswerMap source) {
+    final copy = <String, dynamic>{};
+    for (final entry in source.entries) {
+      final value = entry.value;
+      if (value is List) {
+        copy[entry.key] = List.from(value);
+      } else if (value is DateTime) {
+        copy[entry.key] = value;
+      } else {
+        copy[entry.key] = value;
+      }
+    }
+    return copy;
+  }
+
+  /// Check if answers have been modified compared to original
+  bool _hasChanges() {
+    if (_originalAnswers == null) return true; // New record, always has changes
+
+    // Compare each answer
+    for (final key in _answers.keys) {
+      final newValue = _answers[key];
+      final oldValue = _originalAnswers![key];
+
+      // Handle different types
+      if (newValue is List && oldValue is List) {
+        if (newValue.length != oldValue.length) return true;
+        for (int i = 0; i < newValue.length; i++) {
+          if (newValue[i].toString() != oldValue[i].toString()) return true;
+        }
+      } else if (newValue is DateTime && oldValue is DateTime) {
+        if (newValue != oldValue) return true;
+      } else {
+        if (newValue.toString() != oldValue.toString()) return true;
+      }
+    }
+
+    // Check for removed answers
+    for (final key in _originalAnswers!.keys) {
+      if (!_answers.containsKey(key)) return true;
+    }
+
+    return false;
+  }
+
+  /// Clear answers for questions that were skipped (not visited)
+  /// This ensures data consistency when skip logic bypasses questions
+  /// For example: if sex changes from Female to Male, pregnancy questions should be cleared
+  void _clearSkippedAnswers(List<Question> questions) {
+    // Get all question field names that should collect data (not automatic/information)
+    final dataQuestions = questions.where((q) =>
+      q.type != QuestionType.automatic &&
+      q.type != QuestionType.information
+    ).map((q) => q.fieldName).toSet();
+
+    // Also preserve primary key fields (they're skipped but shouldn't be cleared)
+    final primaryKeys = widget.primaryKeyFields?.map((f) => f.toLowerCase()).toSet() ?? {};
+
+    // Find fields that have answers but were not visited (skipped)
+    final skippedFields = <String>[];
+    for (final fieldName in _answers.keys) {
+      // Check if this is a data question
+      if (!dataQuestions.contains(fieldName)) continue;
+
+      // Check if it's a primary key (don't clear these)
+      if (primaryKeys.contains(fieldName.toLowerCase())) continue;
+
+      // Check if it was visited
+      if (!_visitedFields.contains(fieldName)) {
+        skippedFields.add(fieldName);
+      }
+    }
+
+    // Clear the skipped fields
+    if (skippedFields.isNotEmpty) {
+      debugPrint('Clearing ${skippedFields.length} skipped fields: ${skippedFields.join(", ")}');
+      for (final field in skippedFields) {
+        _answers[field] = null;
+      }
     }
   }
 
@@ -90,6 +242,12 @@ class _SurveyScreenState extends State<SurveyScreen> {
         continue;
       }
 
+      // Skip primary key questions in edit mode
+      if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) {
+        index++;
+        continue;
+      }
+
       // Check preskip conditions
       final preSkipTarget = SkipService.evaluateSkips(q.preSkips, _answers);
       if (preSkipTarget != null) {
@@ -107,6 +265,21 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
     // Reached end of survey
     return qs.length - 1;
+  }
+
+  /// Check if a field name is a primary key field
+  bool _isPrimaryKeyField(String fieldName) {
+    if (widget.primaryKeyFields == null) return false;
+
+    // Case-insensitive comparison
+    final fieldLower = fieldName.toLowerCase();
+    for (final pkField in widget.primaryKeyFields!) {
+      if (pkField.toLowerCase() == fieldLower) {
+        debugPrint('Found primary key match: $fieldName matches $pkField');
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Find a question by its fieldName
@@ -178,21 +351,37 @@ class _SurveyScreenState extends State<SurveyScreen> {
     // The automatic value calculation is already handled in QuestionView.initState
     // But we can also do it here for automatic questions we skip over
     if (_answers[q.fieldName] == null) {
-      final value = AutoFields.compute(_answers, q);
+      final value = AutoFields.compute(_answers, q, isEditMode: widget.uniqueId != null);
       _answers[q.fieldName] = value;
     }
   }
 
   /// Skip to the first question that should be displayed (on initial load)
-  /// Only skips automatic questions, information questions are displayed
+  /// Skips automatic questions and primary key questions in edit mode
   void _skipToFirstDisplayedQuestion(List<Question> questions) {
-    if (_currentQuestion == 0 && questions[0].type == QuestionType.automatic) {
-      // Process all automatic questions at the start
+    if (_currentQuestion == 0) {
       int index = 0;
-      while (index < questions.length &&
-          questions[index].type == QuestionType.automatic) {
-        _processAutomaticQuestion(questions[index]);
-        index++;
+
+      // Find the first displayable question
+      while (index < questions.length) {
+        final q = questions[index];
+
+        // Process and skip automatic questions
+        if (q.type == QuestionType.automatic) {
+          _processAutomaticQuestion(q);
+          index++;
+          continue;
+        }
+
+        // Skip primary key questions in edit mode
+        if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) {
+          debugPrint('Skipping primary key question on load: ${q.fieldName}');
+          index++;
+          continue;
+        }
+
+        // Found a displayable question
+        break;
       }
 
       if (index < questions.length && index != _currentQuestion) {
@@ -207,9 +396,13 @@ class _SurveyScreenState extends State<SurveyScreen> {
   /// Information questions ARE displayed
   bool _hasNextDisplayedQuestion(List<Question> questions, int fromIndex) {
     for (int i = fromIndex + 1; i < questions.length; i++) {
-      if (questions[i].type != QuestionType.automatic) {
-        return true;
-      }
+      final q = questions[i];
+      // Skip automatic questions
+      if (q.type == QuestionType.automatic) continue;
+      // Skip primary key questions in edit mode
+      if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) continue;
+      // Found a displayable question
+      return true;
     }
     return false;
   }
@@ -237,6 +430,13 @@ class _SurveyScreenState extends State<SurveyScreen> {
         }
 
         final q = questions[_currentQuestion];
+
+        // Track that this question was displayed/visited
+        // Skip tracking automatic questions as they're never displayed
+        if (q.type != QuestionType.automatic) {
+          _visitedFields.add(q.fieldName);
+        }
+
         final isFirst = _history.isEmpty;
         final canProceed = q.type == QuestionType.information ||
             (_isAnswered(q) && _isValid(q));
@@ -311,6 +511,52 @@ class _SurveyScreenState extends State<SurveyScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Primary key fields display (for edit mode)
+                      if (widget.primaryKeyFields != null &&
+                          widget.primaryKeyFields!.isNotEmpty)
+                        Card(
+                          color: Colors.blue.shade50,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.info_outline,
+                                        size: 18, color: Colors.blue.shade700),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Viewing/Modifying Record:',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue.shade900,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                ...widget.primaryKeyFields!.map((field) {
+                                  final value = _answers[field]?.toString() ?? '-';
+                                  return Padding(
+                                    padding: const EdgeInsets.only(left: 26, top: 4),
+                                    child: Text(
+                                      '${field.toUpperCase()}: $value',
+                                      style: TextStyle(
+                                        color: Colors.blue.shade900,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (widget.primaryKeyFields != null &&
+                          widget.primaryKeyFields!.isNotEmpty)
+                        const SizedBox(height: 12),
+
                       // Header with progress
                       Card(
                         child: Padding(
@@ -362,6 +608,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
                                   answers: _answers,
                                   onAnswerChanged: () => setState(() {}),
                                   onRequestNext: () => _next(questions),
+                                  isEditMode: widget.uniqueId != null,
                                 ),
                               ),
                             ),
@@ -422,6 +669,37 @@ class _SurveyScreenState extends State<SurveyScreen> {
     // Prevent multiple submissions
     if (_isSaving) return;
 
+    // Get questions list for clearing skipped answers
+    final questions = await _questions;
+
+    // Clear answers for any questions that were skipped due to skip logic
+    // This ensures data consistency (e.g., clearing pregnancy data if sex changed to male)
+    _clearSkippedAnswers(questions);
+
+    // Check if there are any changes (for edit mode only)
+    if (widget.uniqueId != null && !_hasChanges()) {
+      // No changes made, show dialog and return
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('No Changes'),
+          content: const Text('No changes were made to this record.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+                // Pop until we reach main screen (pop survey + record selector)
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              },
+              child: const Text('OK'),
+            )
+          ],
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isSaving = true;
     });
@@ -430,10 +708,22 @@ class _SurveyScreenState extends State<SurveyScreen> {
     String? errorMessage;
 
     try {
-      await DbService.saveInterview(
-        surveyFilename: AppConfig.surveyFilename,
-        answers: _answers,
-      );
+      // Determine if we're updating or inserting
+      if (widget.uniqueId != null) {
+        // Update existing record
+        await DbService.updateInterview(
+          surveyFilename: AppConfig.surveyFilename,
+          answers: _answers,
+          uniqueId: widget.uniqueId!,
+          originalAnswers: _originalAnswers,
+        );
+      } else {
+        // Insert new record
+        await DbService.saveInterview(
+          surveyFilename: AppConfig.surveyFilename,
+          answers: _answers,
+        );
+      }
       saveSuccessful = true;
     } catch (e) {
       // Capture the error to show in dialog
@@ -445,17 +735,27 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
     if (saveSuccessful) {
       // Success dialog - modal (barrierDismissible: false prevents tapping outside)
+      final isUpdate = widget.uniqueId != null;
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (_) => AlertDialog(
           title: const Text('All done!'),
-          content: Text('Thanks! Answers saved successfully.'),
+          content: Text(isUpdate
+              ? 'Thanks! Record updated successfully.'
+              : 'Thanks! Answers saved successfully.'),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop(); // Close dialog
-                Navigator.of(context).pop(); // Return to main screen
+                // Pop until we reach main screen
+                if (isUpdate) {
+                  // In edit mode: pop survey + record selector screens
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                } else {
+                  // In new mode: just pop survey screen
+                  Navigator.of(context).pop();
+                }
               },
               child: const Text('OK'),
             )
@@ -517,7 +817,14 @@ class _SurveyScreenState extends State<SurveyScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop(); // Close dialog
-                  Navigator.of(context).pop(); // Return to main screen
+                  // Pop until we reach main screen
+                  if (widget.uniqueId != null) {
+                    // In edit mode: pop survey + record selector screens
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  } else {
+                    // In new mode: just pop survey screen
+                    Navigator.of(context).pop();
+                  }
                 },
                 child: const Text('Close'),
               ),
