@@ -10,6 +10,7 @@ class QuestionView extends StatefulWidget {
   final AnswerMap answers; // shared map so we can restore / persist answers
   final VoidCallback? onAnswerChanged;
   final VoidCallback? onRequestNext; // ask parent to navigate to next question
+  final bool isEditMode; // Whether we're editing an existing record
 
   const QuestionView({
     super.key,
@@ -17,6 +18,7 @@ class QuestionView extends StatefulWidget {
     required this.answers,
     this.onAnswerChanged,
     this.onRequestNext,
+    this.isEditMode = false,
   });
 
   @override
@@ -50,6 +52,15 @@ class _QuestionViewState extends State<QuestionView> {
       if (existing is List) ...existing.map((e) => e.toString()),
     };
 
+    // Debug checkbox initialization
+    if (q.type == QuestionType.checkbox) {
+      debugPrint('Initializing checkbox ${q.fieldName}');
+      debugPrint('  existing value from answers[${q.fieldName}]: $existing (type: ${existing.runtimeType})');
+      debugPrint('  is List? ${existing is List}');
+      debugPrint('  _checkboxSelection after init: $_checkboxSelection');
+      debugPrint('  Available options: ${q.options.map((o) => o.value).toList()}');
+    }
+
     _radioSelection = (existing is String) ? existing : null;
     _comboboxSelection = (existing is String) ? existing : null;
 
@@ -69,12 +80,12 @@ class _QuestionViewState extends State<QuestionView> {
 
     // Centralized automatic variable calculation
     if (q.type == QuestionType.automatic && existing == null) {
-      final v = AutoFields.compute(widget.answers, q);
+      final v = AutoFields.compute(widget.answers, q, isEditMode: widget.isEditMode);
       widget.answers[q.fieldName] = v;
     }
     // Also handle datetime type automatic fields
     if (q.type == QuestionType.datetime && existing == null) {
-      final v = AutoFields.compute(widget.answers, q);
+      final v = AutoFields.compute(widget.answers, q, isEditMode: widget.isEditMode);
       widget.answers[q.fieldName] = v;
     }
 
@@ -271,6 +282,9 @@ class _QuestionViewState extends State<QuestionView> {
   }
 
   Widget _buildCheckbox(Question q) {
+    // Debug: Log checkbox state
+    debugPrint('Building checkbox ${q.fieldName}, selection: $_checkboxSelection');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -279,6 +293,7 @@ class _QuestionViewState extends State<QuestionView> {
           runSpacing: 8,
           children: q.options.map((opt) {
             final checked = _checkboxSelection.contains(opt.value);
+            debugPrint('  Option ${opt.value} (${opt.label}): checked=$checked');
             return Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: CheckboxListTile(
