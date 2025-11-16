@@ -16,6 +16,7 @@
 - do not allow duplicate records for the primary key values
 - when selecting/adding a date - can it be modal - clicking outside the date picker makes it disappear and the dtae you may have selected is not the selected date
 - datetime stamp - is it local time - it looks like GMT
+- added comments filed - should always be there - make it optional
 
 
 ## GistXConfig
