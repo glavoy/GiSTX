@@ -23,8 +23,13 @@ class SkipService {
       compareValue = skip.response;
     }
 
-    // Convert actualValue to string for comparison
-    final actualValueStr = actualValue.toString();
+    // Convert actualValue to string for comparison, handling Lists from checkboxes
+    String actualValueStr;
+    if (actualValue is List) {
+      actualValueStr = actualValue.join(',');
+    } else {
+      actualValueStr = actualValue.toString();
+    }
 
     // Evaluate the condition
     final conditionMet = _evaluateCondition(
@@ -82,6 +87,16 @@ class SkipService {
 
       case '>=':
         return _numericCompare(actualValue, compareValue) >= 0;
+
+      case 'contains':
+        // Check if the comma-separated list contains the value
+        final list = actualValue.split(',').map((s) => s.trim()).toList();
+        return list.contains(compareValue);
+
+      case 'does not contain':
+        // Check if the comma-separated list does not contain the value
+        final list = actualValue.split(',').map((s) => s.trim()).toList();
+        return !list.contains(compareValue);
 
       default:
         // Unknown operator, default to false

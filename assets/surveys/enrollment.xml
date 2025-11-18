@@ -26,9 +26,7 @@
 		<numeric_check>
 			<values minvalue ='1' maxvalue='75' other_values = '1' message = 'Number must be between 1 and 75!'></values>
 		</numeric_check>
-		<logic_check>
-			<logic fieldname='tabletnum2' condition = '&lt;&gt;' response = 'tabletnum' response_type = 'dynamic' condition2 = '=' currentresponse = '1' message = 'This does not match your previous entry!'></logic>
-		</logic_check>
+		<logic_check>tabletnum2 <> tabletnum; 'This does not match your previous entry!'</logic_check>
 	</question>
 
 

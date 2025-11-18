@@ -11,6 +11,7 @@ class QuestionView extends StatefulWidget {
   final VoidCallback? onAnswerChanged;
   final VoidCallback? onRequestNext; // ask parent to navigate to next question
   final bool isEditMode; // Whether we're editing an existing record
+  final String? logicError; // The logic check error message to display
 
   const QuestionView({
     super.key,
@@ -19,6 +20,7 @@ class QuestionView extends StatefulWidget {
     this.onAnswerChanged,
     this.onRequestNext,
     this.isEditMode = false,
+    this.logicError,
   });
 
   @override
@@ -229,7 +231,7 @@ class _QuestionViewState extends State<QuestionView> {
           inputFormatters: formatters,
           decoration: InputDecoration(
             hintText: 'Type your answer',
-            errorText: _textError,
+            errorText: widget.logicError ?? _textError,
           ),
           onChanged: (val) {
             setState(() {
@@ -249,6 +251,14 @@ class _QuestionViewState extends State<QuestionView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        if (widget.logicError != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              widget.logicError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+            ),
+          ),
         ...q.options.map(
           (opt) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -261,10 +271,6 @@ class _QuestionViewState extends State<QuestionView> {
                   AutoFields.touchLastMod(widget.answers);
                 });
                 widget.onAnswerChanged?.call();
-                // Auto-advance on selection
-                if (val != null && val.isNotEmpty) {
-                  widget.onRequestNext?.call();
-                }
               },
               child: RadioListTile<String>(
                 value: opt.value,
@@ -289,6 +295,14 @@ class _QuestionViewState extends State<QuestionView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        if (widget.logicError != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              widget.logicError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+            ),
+          ),
         Wrap(
           runSpacing: 8,
           children: q.options.map((opt) {
@@ -329,6 +343,14 @@ class _QuestionViewState extends State<QuestionView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        if (widget.logicError != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0, left: 12.0),
+            child: Text(
+              widget.logicError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+            ),
+          ),
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -353,10 +375,6 @@ class _QuestionViewState extends State<QuestionView> {
                 AutoFields.touchLastMod(widget.answers);
               });
               widget.onAnswerChanged?.call();
-              // Auto-advance on selection
-              if (val != null && val.isNotEmpty) {
-                widget.onRequestNext?.call();
-              }
             },
           ),
         ),
