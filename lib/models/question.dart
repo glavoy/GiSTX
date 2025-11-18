@@ -42,6 +42,7 @@ class Question {
   final List<QuestionOption> options;
   final List<SkipCondition> preSkips;  // Evaluated before showing the question
   final List<SkipCondition> postSkips; // Evaluated after user answers
+  final String? logicCheck;
 
   Question({
     required this.type,
@@ -53,6 +54,7 @@ class Question {
     this.options = const [],
     this.preSkips = const [],
     this.postSkips = const [],
+    this.logicCheck,
   });
 }
 

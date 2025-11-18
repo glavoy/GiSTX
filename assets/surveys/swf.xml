@@ -103,13 +103,14 @@
 	<question type = 'radio' fieldname = 'movedate_day' fieldtype = 'integer'>
 		<text>MOVE DATE (day)</text>
 		<logic_check>
-			<logic fieldname='movedate_month' condition = '=' response = '2' response_type = 'fixed' condition2 = '=' currentresponse = '29' message = 'February does not have 29 days!'></logic>
-			<logic fieldname='movedate_month' condition = '=' response = '2' response_type = 'fixed' condition2 = '=' currentresponse = '30' message = 'February does not have 30 days!'></logic>
-			<logic fieldname='movedate_month' condition = '=' response = '2' response_type = 'fixed' condition2 = '=' currentresponse = '31' message = 'February does not have 31 days!'></logic>
-			<logic fieldname='movedate_month' condition = '=' response = '4' response_type = 'fixed' condition2 = '=' currentresponse = '31' message = 'April only has 30 days!'></logic>
-			<logic fieldname='movedate_month' condition = '=' response = '6' response_type = 'fixed' condition2 = '=' currentresponse = '31' message = 'June only has 30 days!'></logic>
-			<logic fieldname='movedate_month' condition = '=' response = '9' response_type = 'fixed' condition2 = '=' currentresponse = '31' message = 'September only has 30 days!'></logic>
-			<logic fieldname='movedate_month' condition = '=' response = '11' response_type = 'fixed' condition2 = '=' currentresponse = '31' message = 'November only has 30 days!'></logic>
+			(movedate_month = '2' and movedate_day = '29') or
+			(movedate_month = '2' and movedate_day = '30') or
+			(movedate_month = '2' and movedate_day = '31') or
+			(movedate_month = '4' and movedate_day = '31') or
+			(movedate_month = '6' and movedate_day = '31') or
+			(movedate_month = '9' and movedate_day = '31') or
+			(movedate_month = '11' and movedate_day = '31');
+			'Invalid day for the selected month.'
 		</logic_check>
 		<responses>
 			<response value = '1'>1</response>

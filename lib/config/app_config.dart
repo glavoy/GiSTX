@@ -9,7 +9,7 @@ class AppConfig {
   static const String applicationName = 'Welcome to GiSTX';
 
   // Software version - displayed in the app and saved with each interview
-  static const String softwareVersion = '0.0.3';
+  static const String softwareVersion = 'GiSTX 0.0.1';
 
   // Database configuration
   // Set to null to use the default application support directory

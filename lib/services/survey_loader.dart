@@ -59,6 +59,10 @@ class SurveyLoader {
       final preSkips = _parseSkips(q.getElement('preskip'));
       final postSkips = _parseSkips(q.getElement('postskip'));
 
+      // Parse logic check string
+      final logicCheckNode = q.getElement('logic_check');
+      final logicCheck = logicCheckNode?.innerText.trim();
+
       questions.add(
         Question(
           type: type,
@@ -70,6 +74,7 @@ class SurveyLoader {
           options: options,
           preSkips: preSkips,
           postSkips: postSkips,
+          logicCheck: logicCheck,
         ),
       );
     }
