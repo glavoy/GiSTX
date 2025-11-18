@@ -1,0 +1,65 @@
+<?xml version = '1.0' encoding = 'utf-8'?>
+<survey>
+
+
+	<question type = 'automatic' fieldname = 'starttime' fieldtype = 'datetime'>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'subjid' fieldtype = 'text'>
+		<maxCharacters>10</maxCharacters>
+	</question>
+
+
+	<question type = 'date' fieldname = 'vdate' fieldtype = 'date'>
+		<text>Date of visit</text>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'visittype' fieldtype = 'integer'>
+		<text>Visit Type</text>
+		<responses>
+			<response value = '1'>12 week</response>
+			<response value = '2'>24 week</response>
+			<response value = '3'>48 week</response>
+		</responses>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'studyarm' fieldtype = 'integer'>
+		<text>Study Arm</text>
+		<responses>
+			<response value = '1'>Intervention</response>
+			<response value = '0'>Control</response>
+		</responses>
+	</question>
+
+
+	<question type = 'text' fieldname = 'comments' fieldtype = 'text'>
+		<text>Comments (optional)</text>
+		<maxCharacters>80</maxCharacters>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'uniqueid' fieldtype = 'text'>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'swver' fieldtype = 'text'>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'lastmod' fieldtype = 'datetime'>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'stoptime' fieldtype = 'datetime'>
+	</question>
+
+
+	<question type = 'information' fieldname = 'end_of_questions' fieldtype = 'n/a'>
+		<text>Press the 'Finish' button to save the data.</text >
+	</question>
+
+
+</survey>

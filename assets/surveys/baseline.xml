@@ -92,16 +92,33 @@
 	</question>
 
 
-	<question type = 'checkbox' fieldname = 'prep_pep_type' fieldtype = 'text'>
-		<text>What medication(s) have you taken?</text>
+	<question type = 'checkbox' fieldname = 'device_use' fieldtype = 'text'>
+		<text>Which devices do you use regularly? (Select all that apply)</text>
 		<responses>
-			<response value = '1'>Oral PrEP</response>
-			<response value = '2'>Injectable PrEP (CAB-LA)</response>
-			<response value = '3'>PrEP vaginal ring</response>
-			<response value = '4'>PEP</response>
+			<response value = '1'>Smartphone</response>
+			<response value = '2'>Laptop/desktop computer</response>
+			<response value = '3'>Tablet</response>
+			<response value = '4'>Smart watch or fitness tracker</response>
+			<response value = '5'>Gaming console</response>
+			<response value = '99'>Other (specify)</response>
 		</responses>
 		<refuse>-8</refuse>
 		<na>-6</na>
+	</question>
+
+
+	<question type = 'text' fieldname = 'device_use_other' fieldtype = 'text'>
+		<text>Specify other device(s)</text>
+		<maxCharacters>80</maxCharacters>
+		<preskip>
+			<skip fieldname='device_use' condition = 'does not contain' response='99' response_type='fixed' skiptofieldname ='comments'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'text' fieldname = 'comments' fieldtype = 'text'>
+		<text>Comments (optional)</text>
+		<maxCharacters>80</maxCharacters>
 	</question>
 
 
@@ -122,7 +139,7 @@
 
 
 	<question type = 'information' fieldname = 'end_of_questions' fieldtype = 'n/a'>
-		<text>Press the 'Next' button to save the data.</text >
+		<text>Press the 'Finish' button to save the data.</text >
 	</question>
 
 

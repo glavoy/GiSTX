@@ -1,11 +1,13 @@
 ### To Do
 
+- add 'Special buttons'
+- add 'does not contain' and contains
 - add logic checks - multiple
 - add multiple skips
+- commetns fiewld should be optional
 - add 'modifying survey' - change auto variables
 - add logic for date ranges: +/- day(s)/month(s)/year(s) - gist config
 - ensure skip logic works for several skips at once
-- add 'special buttons'
 - the OK screen confirmation at the end is not modal - when clicking anywhere it goes away and the user can click finish again and the data is saved again to the database
 - add module for doing custom logic checks - or better yet, add them to the xml file and add more logic to the app
 - add DB logic to check if all the fields exist in the database - based on the xml file - if not add new fields - this is now automatic
@@ -17,7 +19,7 @@
 - when selecting/adding a date - can it be modal - clicking outside the date picker makes it disappear and the dtae you may have selected is not the selected date
 - datetime stamp - is it local time - it looks like GMT
 - added comments filed - should always be there - make it optional
-
+- Add time type to gistx
 
 ## GistXConfig
 - look at the code for parsing skips - add multiple logic: if xxx = 1 and yyy < 5, then skip to...
