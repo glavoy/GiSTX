@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'survey_screen.dart';
-import 'record_selector_screen.dart';
+import '../config/app_config.dart';
+import 'questionnaire_selector_screen.dart';
 
 class MainScreen extends StatelessWidget {
   const MainScreen({super.key});
@@ -53,9 +53,10 @@ class MainScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'Welcome to GiSTX',
-                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                  Text(
+                    '${AppConfig.applicationName}',
+                    style: const TextStyle(
+                        fontSize: 32, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
@@ -64,7 +65,10 @@ class MainScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const SurveyScreen(),
+                          builder: (context) =>
+                              const QuestionnaireSelectorScreen(
+                            isModifyMode: false,
+                          ),
                         ),
                       );
                     },
@@ -84,7 +88,10 @@ class MainScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const RecordSelectorScreen(),
+                          builder: (context) =>
+                              const QuestionnaireSelectorScreen(
+                            isModifyMode: true,
+                          ),
                         ),
                       );
                     },

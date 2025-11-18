@@ -5,6 +5,9 @@
 /// Modify these values to match your deployment environment.
 
 class AppConfig {
+  // Application name - displayed on the main welcome screen
+  static const String applicationName = 'Welcome to GiSTX';
+
   // Software version - displayed in the app and saved with each interview
   static const String softwareVersion = '0.0.3';
 
@@ -12,7 +15,7 @@ class AppConfig {
   // Set to null to use the default application support directory
   // Set to a specific path to use a custom location (e.g., 'C:\\GiSTX\\Data\\gistx.sqlite')
   static const String? customDatabasePath =
-      'C:\\gistx\\database\\gistx_config.sqlite';
+      'C:\\gistx\\database\\fake_survey.sqlite';
 
   // Default database filename (used if customDatabasePath is null)
   static const String databaseFilename = 'gistx.sqlite';
