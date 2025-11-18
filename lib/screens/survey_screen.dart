@@ -227,946 +227,488 @@ class _SurveyScreenState extends State<SurveyScreen> {
     }
   }
 
-    /// Called whenever an answer changes
+  /// Called whenever an answer changes
+  void _onAnswerChanged() {
+    if (_loadedQuestions == null || !mounted) return;
 
-    void _onAnswerChanged() {
+    setState(() {
+      final q = _loadedQuestions![_currentQuestion];
+      _logicError = LogicService.evaluateLogicChecks(q, _answers);
+    });
+  }
 
-      if (_loadedQuestions == null || !mounted) return;
+  /// Navigate to the next question, auto-skipping automatic questions
+  /// Information questions ARE displayed to the user
+  void _next(List<Question> qs) {
+    if (_currentQuestion >= qs.length - 1) return;
 
-  
-
-      setState(() {
-
-        final q = _loadedQuestions![_currentQuestion];
-
-        _logicError = LogicService.evaluateLogicChecks(q, _answers);
-
-      });
-
+    // Push current displayed question to history (skip automatic)
+    if (qs[_currentQuestion].type != QuestionType.automatic) {
+      _history.add(_currentQuestion);
+      // history keeps track of previous questions implicitly
     }
 
-  
+    // Check for postskip conditions on the current question
+    final currentQ = qs[_currentQuestion];
+    final postSkipTarget =
+        SkipService.evaluateSkips(currentQ.postSkips, _answers);
 
-    /// Navigate to the next question, auto-skipping automatic questions
-
-    /// Information questions ARE displayed to the user
-
-    void _next(List<Question> qs) {
-
-      if (_currentQuestion >= qs.length - 1) return;
-
-  
-
-      // Push current displayed question to history (skip automatic)
-
-      if (qs[_currentQuestion].type != QuestionType.automatic) {
-
-        _history.add(_currentQuestion);
-
-        // history keeps track of previous questions implicitly
-
-      }
-
-  
-
-      // Check for postskip conditions on the current question
-
-      final currentQ = qs[_currentQuestion];
-
-      final postSkipTarget =
-
-          SkipService.evaluateSkips(currentQ.postSkips, _answers);
-
-  
-
-      int nextIndex;
-
-      if (postSkipTarget != null) {
-
-        // Postskip condition met - find the target question
-
-        nextIndex = _findQuestionByFieldName(qs, postSkipTarget);
-
-        if (nextIndex == -1) {
-
-          // Target not found, go to next question normally
-
-          nextIndex = _currentQuestion + 1;
-
-        }
-
-      } else {
-
-        // No postskip, move to next question
-
+    int nextIndex;
+    if (postSkipTarget != null) {
+      // Postskip condition met - find the target question
+      nextIndex = _findQuestionByFieldName(qs, postSkipTarget);
+      if (nextIndex == -1) {
+        // Target not found, go to next question normally
         nextIndex = _currentQuestion + 1;
-
       }
-
-  
-
-      // Skip automatic questions and evaluate preskips
-
-      nextIndex = _findNextDisplayedQuestion(qs, nextIndex);
-
-  
-
-      setState(() {
-
-        _currentQuestion = nextIndex;
-
-        _logicError = null; // Clear error on navigation
-
-      });
-
+    } else {
+      // No postskip, move to next question
+      nextIndex = _currentQuestion + 1;
     }
 
-  
+    // Skip automatic questions and evaluate preskips
+    nextIndex = _findNextDisplayedQuestion(qs, nextIndex);
 
-    /// Find the next question that should be displayed
+    setState(() {
+      _currentQuestion = nextIndex;
+      _logicError = null; // Clear error on navigation
+    });
+  }
 
-    /// Handles automatic questions and preskip conditions
+  /// Find the next question that should be displayed
+  /// Handles automatic questions and preskip conditions
+  int _findNextDisplayedQuestion(List<Question> qs, int startIndex) {
+    int index = startIndex;
 
-    int _findNextDisplayedQuestion(List<Question> qs, int startIndex) {
+    while (index < qs.length) {
+      final q = qs[index];
 
-      int index = startIndex;
+      // Process and skip automatic questions
+      if (q.type == QuestionType.automatic) {
+        _processAutomaticQuestion(q);
+        index++;
+        continue;
+      }
 
-  
+      // Skip primary key questions in edit mode
+      if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) {
+        index++;
+        continue;
+      }
 
-      while (index < qs.length) {
+      // Check preskip conditions
+      final preSkipTarget = SkipService.evaluateSkips(q.preSkips, _answers);
+      if (preSkipTarget != null) {
+        // Preskip condition met - jump to target
+        final targetIndex = _findQuestionByFieldName(qs, preSkipTarget);
+        if (targetIndex != -1) {
+          index = targetIndex;
+          continue; // Re-evaluate the target question
+        }
+      }
 
-        final q = qs[index];
+      // This question should be displayed
+      return index;
+    }
 
-  
+    // Reached end of survey
+    return qs.length - 1;
+  }
+
+  /// Check if a field name is a primary key field
+  bool _isPrimaryKeyField(String fieldName) {
+    if (widget.primaryKeyFields == null) return false;
+
+    // Case-insensitive comparison
+    final fieldLower = fieldName.toLowerCase();
+    for (final pkField in widget.primaryKeyFields!) {
+      if (pkField.toLowerCase() == fieldLower) {
+        debugPrint('Found primary key match: $fieldName matches $pkField');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Find a question by its fieldName
+  int _findQuestionByFieldName(List<Question> qs, String fieldName) {
+    for (int i = 0; i < qs.length; i++) {
+      if (qs[i].fieldName == fieldName) {
+        return i;
+      }
+    }
+    return -1; // Not found
+  }
+
+  /// Navigate to the previous displayed question
+  void _prev() {
+    if (_history.isEmpty) return;
+
+    setState(() {
+      _currentQuestion = _history.removeLast();
+      _logicError = null; // Clear error on navigation
+    });
+  }
+
+  bool _isAnswered(Question q) {
+    // Special case: 'comments' field is always optional
+    if (q.fieldName.toLowerCase() == 'comments') {
+      return true;
+    }
+
+    final val = _answers[q.fieldName];
+
+    switch (q.type) {
+      case QuestionType.text:
+        return (val is String) && val.trim().isNotEmpty;
+      case QuestionType.radio:
+        return val != null && val.toString().isNotEmpty;
+      case QuestionType.checkbox:
+        return (val is List) && val.isNotEmpty;
+      case QuestionType.combobox:
+        return val != null && val.toString().isNotEmpty;
+      case QuestionType.date:
+      case QuestionType.datetime:
+        return val != null && val.toString().isNotEmpty;
+      case QuestionType.information:
+      case QuestionType.automatic:
+        return true; // not applicable
+    }
+  }
+
+  bool _isValid(Question q) {
+    // For integer text fields, enforce numeric_check range
+    if (q.type == QuestionType.text &&
+        q.fieldType.toLowerCase().contains('integer')) {
+      final raw = _answers[q.fieldName]?.toString() ?? '';
+      if (raw.isEmpty) return false;
+
+      final parsed = int.tryParse(raw);
+      if (parsed == null) return false;
+
+      final nc = q.numericCheck;
+      if (nc != null) {
+        final exceptions = (nc.otherValues ?? '')
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toSet();
+
+        if (!exceptions.contains(parsed.toString())) {
+          if (nc.minValue != null && parsed < nc.minValue!) return false;
+          if (nc.maxValue != null && parsed > nc.maxValue!) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  // Previous question lookup is handled by _history
+
+  /// Process an automatic question by calculating its value
+  void _processAutomaticQuestion(Question q) {
+    // The automatic value calculation is already handled in QuestionView.initState
+    // But we can also do it here for automatic questions we skip over
+    if (_answers[q.fieldName] == null) {
+      final value =
+          AutoFields.compute(_answers, q, isEditMode: widget.uniqueId != null);
+      _answers[q.fieldName] = value;
+    }
+  }
+
+  /// Skip to the first question that should be displayed (on initial load)
+  /// Skips automatic questions and primary key questions in edit mode
+  void _skipToFirstDisplayedQuestion(List<Question> questions) {
+    if (_currentQuestion == 0) {
+      int index = 0;
+
+      // Find the first displayable question
+      while (index < questions.length) {
+        final q = questions[index];
 
         // Process and skip automatic questions
-
         if (q.type == QuestionType.automatic) {
-
           _processAutomaticQuestion(q);
-
           index++;
-
           continue;
-
         }
 
-  
-
         // Skip primary key questions in edit mode
-
         if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) {
-
+          debugPrint('Skipping primary key question on load: ${q.fieldName}');
           index++;
-
           continue;
-
         }
-
-  
-
-        // Check preskip conditions
-
-        final preSkipTarget = SkipService.evaluateSkips(q.preSkips, _answers);
-
-        if (preSkipTarget != null) {
-
-          // Preskip condition met - jump to target
-
-          final targetIndex = _findQuestionByFieldName(qs, preSkipTarget);
-
-          if (targetIndex != -1) {
-
-            index = targetIndex;
-
-            continue; // Re-evaluate the target question
-
-          }
-
-        }
-
-  
-
-        // This question should be displayed
-
-        return index;
-
-      }
-
-  
-
-      // Reached end of survey
-
-      return qs.length - 1;
-
-    }
-
-  
-
-    /// Check if a field name is a primary key field
-
-    bool _isPrimaryKeyField(String fieldName) {
-
-      if (widget.primaryKeyFields == null) return false;
-
-  
-
-      // Case-insensitive comparison
-
-      final fieldLower = fieldName.toLowerCase();
-
-      for (final pkField in widget.primaryKeyFields!) {
-
-        if (pkField.toLowerCase() == fieldLower) {
-
-          debugPrint('Found primary key match: $fieldName matches $pkField');
-
-          return true;
-
-        }
-
-      }
-
-      return false;
-
-    }
-
-  
-
-    /// Find a question by its fieldName
-
-    int _findQuestionByFieldName(List<Question> qs, String fieldName) {
-
-      for (int i = 0; i < qs.length; i++) {
-
-        if (qs[i].fieldName == fieldName) {
-
-          return i;
-
-        }
-
-      }
-
-      return -1; // Not found
-
-    }
-
-  
-
-    /// Navigate to the previous displayed question
-
-    void _prev() {
-
-      if (_history.isEmpty) return;
-
-      setState(() {
-
-        _currentQuestion = _history.removeLast();
-
-        _logicError = null; // Clear error on navigation
-
-      });
-
-    }
-
-  
-
-    bool _isAnswered(Question q) {
-
-      // Special case: 'comments' field is always optional
-      if (q.fieldName.toLowerCase() == 'comments') {
-        return true;
-      }
-
-      final val = _answers[q.fieldName];
-
-      switch (q.type) {
-
-        case QuestionType.text:
-
-          return (val is String) && val.trim().isNotEmpty;
-
-        case QuestionType.radio:
-
-          return val != null && val.toString().isNotEmpty;
-
-        case QuestionType.checkbox:
-
-          return (val is List) && val.isNotEmpty;
-
-        case QuestionType.combobox:
-
-          return val != null && val.toString().isNotEmpty;
-
-        case QuestionType.date:
-
-        case QuestionType.datetime:
-
-          return val != null && val.toString().isNotEmpty;
-
-        case QuestionType.information:
-
-        case QuestionType.automatic:
-
-          return true; // not applicable
-
-      }
-
-    }
-
-  
-
-    bool _isValid(Question q) {
-
-      // For integer text fields, enforce numeric_check range
-
-      if (q.type == QuestionType.text &&
-
-          q.fieldType.toLowerCase().contains('integer')) {
-
-        final raw = _answers[q.fieldName]?.toString() ?? '';
-
-        if (raw.isEmpty) return false;
-
-        final parsed = int.tryParse(raw);
-
-        if (parsed == null) return false;
-
-        final nc = q.numericCheck;
-
-        if (nc != null) {
-
-          final exceptions = (nc.otherValues ?? '')
-
-              .split(',')
-
-              .map((s) => s.trim())
-
-              .where((s) => s.isNotEmpty)
-
-              .toSet();
-
-          if (!exceptions.contains(parsed.toString())) {
-
-            if (nc.minValue != null && parsed < nc.minValue!) return false;
-
-            if (nc.maxValue != null && parsed > nc.maxValue!) return false;
-
-          }
-
-        }
-
-      }
-
-      return true;
-
-    }
-
-  
-
-    // Previous question lookup is handled by _history
-
-  
-
-    /// Process an automatic question by calculating its value
-
-    void _processAutomaticQuestion(Question q) {
-
-      // The automatic value calculation is already handled in QuestionView.initState
-
-      // But we can also do it here for automatic questions we skip over
-
-      if (_answers[q.fieldName] == null) {
-
-        final value =
-
-            AutoFields.compute(_answers, q, isEditMode: widget.uniqueId != null);
-
-        _answers[q.fieldName] = value;
-
-      }
-
-    }
-
-  
-
-    /// Skip to the first question that should be displayed (on initial load)
-
-    /// Skips automatic questions and primary key questions in edit mode
-
-    void _skipToFirstDisplayedQuestion(List<Question> questions) {
-
-      if (_currentQuestion == 0) {
-
-        int index = 0;
-
-  
-
-        // Find the first displayable question
-
-        while (index < questions.length) {
-
-          final q = questions[index];
-
-  
-
-          // Process and skip automatic questions
-
-          if (q.type == QuestionType.automatic) {
-
-            _processAutomaticQuestion(q);
-
-            index++;
-
-            continue;
-
-          }
-
-  
-
-          // Skip primary key questions in edit mode
-
-          if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) {
-
-            debugPrint('Skipping primary key question on load: ${q.fieldName}');
-
-            index++;
-
-            continue;
-
-          }
-
-  
-
-          // Found a displayable question
-
-          break;
-
-        }
-
-  
-
-        if (index < questions.length && index != _currentQuestion) {
-
-          setState(() {
-
-            _currentQuestion = index;
-
-          });
-
-        }
-
-      }
-
-    }
-
-  
-
-    /// Check if there's a next question to display (not automatic)
-
-    /// Information questions ARE displayed
-
-    bool _hasNextDisplayedQuestion(List<Question> questions, int fromIndex) {
-
-      for (int i = fromIndex + 1; i < questions.length; i++) {
-
-        final q = questions[i];
-
-        // Skip automatic questions
-
-        if (q.type == QuestionType.automatic) continue;
-
-        // Skip primary key questions in edit mode
-
-        if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) continue;
 
         // Found a displayable question
-
-        return true;
-
+        break;
       }
 
-      return false;
-
+      if (index < questions.length && index != _currentQuestion) {
+        setState(() {
+          _currentQuestion = index;
+        });
+      }
     }
+  }
 
-  
+  /// Check if there's a next question to display (not automatic)
+  /// Information questions ARE displayed
+  bool _hasNextDisplayedQuestion(List<Question> questions, int fromIndex) {
+    for (int i = fromIndex + 1; i < questions.length; i++) {
+      final q = questions[i];
 
-    @override
+      // Skip automatic questions
+      if (q.type == QuestionType.automatic) continue;
 
-    Widget build(BuildContext context) {
+      // Skip primary key questions in edit mode
+      if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) continue;
 
-      return FutureBuilder<List<Question>>(
+      // Found a displayable question
+      return true;
+    }
+    return false;
+  }
 
-        future: _questions,
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Question>>(
+      future: _questions,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator()));
+        }
 
-        builder: (context, snap) {
+        if (snap.hasError) {
+          return Scaffold(body: Center(child: Text('Error: ${snap.error}')));
+        }
 
-          if (snap.connectionState != ConnectionState.done) {
+        final questions = snap.data!;
+        _loadedQuestions = questions; // Keep a reference to the loaded questions
 
-            return const Scaffold(
+        // Skip automatic and information questions on initial load
+        if (_currentQuestion == 0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _skipToFirstDisplayedQuestion(questions);
+          });
+        }
 
-                body: Center(child: CircularProgressIndicator()));
+        final q = questions[_currentQuestion];
 
-          }
+        // Track that this question was displayed/visited
+        // Skip tracking automatic questions as they're never displayed
+        if (q.type != QuestionType.automatic) {
+          _visitedFields.add(q.fieldName);
+        }
 
-          if (snap.hasError) {
+        final isFirst = _history.isEmpty;
+        final canProceed = (q.type == QuestionType.information ||
+            (_isAnswered(q) && _isValid(q))) && _logicError == null;
+        final isLast = _currentQuestion == questions.length - 1 ||
+            !_hasNextDisplayedQuestion(questions, _currentQuestion);
+        final progress = (_currentQuestion + 1) / questions.length;
 
-            return Scaffold(body: Center(child: Text('Error: ${snap.error}')));
-
-          }
-
-  
-
-          final questions = snap.data!;
-
-          _loadedQuestions = questions; // Keep a reference to the loaded questions
-
-  
-
-          // Skip automatic and information questions on initial load
-
-          if (_currentQuestion == 0) {
-
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-
-              _skipToFirstDisplayedQuestion(questions);
-
-            });
-
-          }
-
-  
-
-          final q = questions[_currentQuestion];
-
-  
-
-          // Track that this question was displayed/visited
-
-          // Skip tracking automatic questions as they're never displayed
-
-          if (q.type != QuestionType.automatic) {
-
-            _visitedFields.add(q.fieldName);
-
-          }
-
-  
-
-          final isFirst = _history.isEmpty;
-
-          final canProceed = (q.type == QuestionType.information ||
-
-              (_isAnswered(q) && _isValid(q))) && _logicError == null;
-
-          final isLast = _currentQuestion == questions.length - 1 ||
-
-              !_hasNextDisplayedQuestion(questions, _currentQuestion);
-
-          final progress = (_currentQuestion + 1) / questions.length;
-
-  
-
-          return Scaffold(
-
-            appBar: AppBar(
-
-              toolbarHeight: 120,
-
-              automaticallyImplyLeading: false,
-
-              title: Row(
-
-                children: [
-
-                  ClipRRect(
-
-                    borderRadius: BorderRadius.circular(12),
-
-                    child: Image.asset(
-
-                      'assets/branding/gistx.png',
-
-                      width: 100,
-
-                      height: 100,
-
-                    ),
-
+        return Scaffold(
+          appBar: AppBar(
+            toolbarHeight: 120,
+            automaticallyImplyLeading: false,
+            title: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    'assets/branding/gistx.png',
+                    width: 100,
+                    height: 100,
                   ),
-
-                  const SizedBox(width: 10),
-
-                  // const Text("Geoff's Dart Questionnaire"), // or your new name
-
-                ],
-
-              ),
-
-              actions: [
-
-                Padding(
-
-                  padding: const EdgeInsets.only(right: 12.0),
-
-                  child: FilledButton.tonal(
-
-                    onPressed: () {
-
-                      showDialog(
-
-                        context: context,
-
-                        builder: (_) => AlertDialog(
-
-                          title: const Text('Cancel Interview'),
-
-                          content: const Text(
-
-                              'Are you sure you want to cancel the interview? \n\nAll data will be lost!'),
-
-                          actions: [
-
-                            TextButton(
-
-                              onPressed: () => Navigator.of(context).pop(),
-
-                              child: const Text('No'),
-
-                            ),
-
-                            TextButton(
-
-                              onPressed: () {
-
-                                Navigator.of(context).pop(); // Close dialog
-
-                                Navigator.of(context)
-
-                                    .pop(); // Return to main screen
-
-                              },
-
-                              child: const Text('Yes'),
-
-                            ),
-
-                          ],
-
-                        ),
-
-                      );
-
-                    },
-
-                    style: FilledButton.styleFrom(
-
-                      padding:
-
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-
-                      shape: RoundedRectangleBorder(
-
-                        borderRadius: BorderRadius.circular(8),
-
-                      ),
-
-                    ),
-
-                    child: const Text('Cancel Interview'),
-
-                  ),
-
                 ),
-
+                const SizedBox(width: 10),
+                // const Text("Geoff's Dart Questionnaire"), // or your new name
               ],
-
             ),
-
-            body: SafeArea(
-
-              child: Center(
-
-                child: ConstrainedBox(
-
-                  constraints: const BoxConstraints(maxWidth: 720),
-
-                  child: Padding(
-
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-
-                    child: Column(
-
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-
-                      children: [
-
-                        // Primary key fields display (for edit mode)
-
-                        if (widget.primaryKeyFields != null &&
-
-                            widget.primaryKeyFields!.isNotEmpty)
-
-                          Card(
-
-                            color: Colors.blue.shade50,
-
-                            child: Padding(
-
-                              padding: const EdgeInsets.all(12),
-
-                              child: Column(
-
-                                crossAxisAlignment: CrossAxisAlignment.start,
-
-                                children: [
-
-                                  Row(
-
-                                    children: [
-
-                                      Icon(Icons.info_outline,
-
-                                          size: 18, color: Colors.blue.shade700),
-
-                                      const SizedBox(width: 8),
-
-                                      Text(
-
-                                        'Viewing/Modifying Record:',
-
-                                        style: TextStyle(
-
-                                          fontWeight: FontWeight.bold,
-
-                                          color: Colors.blue.shade900,
-
-                                        ),
-
-                                      ),
-
-                                    ],
-
-                                  ),
-
-                                  const SizedBox(height: 8),
-
-                                  ...widget.primaryKeyFields!.map((field) {
-
-                                    final value =
-
-                                        _answers[field]?.toString() ?? '-';
-
-                                    return Padding(
-
-                                      padding:
-
-                                          const EdgeInsets.only(left: 26, top: 4),
-
-                                      child: Text(
-
-                                        '${field.toUpperCase()}: $value',
-
-                                        style: TextStyle(
-
-                                          color: Colors.blue.shade900,
-
-                                          fontSize: 13,
-
-                                        ),
-
-                                      ),
-
-                                    );
-
-                                  }),
-
-                                ],
-
-                              ),
-
-                            ),
-
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 12.0),
+                child: FilledButton.tonal(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Cancel Interview'),
+                        content: const Text(
+                            'Are you sure you want to cancel the interview? \n\nAll data will be lost!'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('No'),
                           ),
-
-                        if (widget.primaryKeyFields != null &&
-
-                            widget.primaryKeyFields!.isNotEmpty)
-
-                          const SizedBox(height: 12),
-
-  
-
-                        // Header with progress
-
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop(); // Close dialog
+                              Navigator.of(context)
+                                  .pop(); // Return to main screen
+                            },
+                            child: const Text('Yes'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Cancel Interview'),
+                ),
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Primary key fields display (for edit mode)
+                      if (widget.primaryKeyFields != null &&
+                          widget.primaryKeyFields!.isNotEmpty)
                         Card(
-
+                          color: Colors.blue.shade50,
                           child: Padding(
-
-                            padding: const EdgeInsets.all(16),
-
+                            padding: const EdgeInsets.all(12),
                             child: Column(
-
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-
                                 Row(
-
                                   children: [
-
+                                    Icon(Icons.info_outline,
+                                        size: 18, color: Colors.blue.shade700),
+                                    const SizedBox(width: 8),
                                     Text(
-
-                                        'Step ${_currentQuestion + 1} of ${questions.length}',
-
-                                        style: Theme.of(context)
-
-                                            .textTheme
-
-                                            .titleMedium),
-
-                                    const Spacer(),
-
-                                    Text('${(progress * 100).round()}%',
-
-                                        style: Theme.of(context)
-
-                                            .textTheme
-
-                                            .labelLarge),
-
+                                      'Viewing/Modifying Record:',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue.shade900,
+                                      ),
+                                    ),
                                   ],
-
                                 ),
-
-                                const SizedBox(height: 12),
-
-                                ClipRRect(
-
-                                  borderRadius: BorderRadius.circular(8),
-
-                                  child: LinearProgressIndicator(
-
-                                      value: progress, minHeight: 8),
-
-                                ),
-
+                                const SizedBox(height: 8),
+                                ...widget.primaryKeyFields!.map((field) {
+                                  final value =
+                                      _answers[field]?.toString() ?? '-';
+                                  return Padding(
+                                    padding:
+                                        const EdgeInsets.only(left: 26, top: 4),
+                                    child: Text(
+                                      '${field.toUpperCase()}: $value',
+                                      style: TextStyle(
+                                        color: Colors.blue.shade900,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  );
+                                }),
                               ],
-
                             ),
-
                           ),
-
                         ),
-
-                        const SizedBox(height: 14),
-
-  
-
-                        // Animated question card
-
-                        Expanded(
-
-                          child: AnimatedSwitcher(
-
-                            duration: const Duration(milliseconds: 300),
-
-                            switchInCurve: Curves.easeOut,
-
-                            switchOutCurve: Curves.easeIn,
-
-                            child: Card(
-
-                              key: ValueKey(
-
-                                  q.fieldName), // forces fresh state per question
-
-                              child: Padding(
-
-                                padding: const EdgeInsets.all(18),
-
-                                child: SingleChildScrollView(
-
-                                  child: QuestionView(
-
-                                    key: ValueKey('view_${q.fieldName}'),
-
-                                    question: q,
-
-                                    answers: _answers,
-
-                                    onAnswerChanged: () => _onAnswerChanged(),
-
-                                    onRequestNext: () => _next(questions),
-
-                                    isEditMode: widget.uniqueId != null,
-
-                                    logicError: _logicError,
-
-                                  ),
-
-                                ),
-
-                              ),
-
-                            ),
-
-                          ),
-
-                        ),
-
-  
-
+                      if (widget.primaryKeyFields != null &&
+                          widget.primaryKeyFields!.isNotEmpty)
                         const SizedBox(height: 12),
 
-  
-
-                        // Nav bar
-
-                        Row(
-
-                          children: [
-
-                            if (!isFirst)
-
-                              OutlinedButton.icon(
-
-                                onPressed: _prev,
-
-                                icon: const Icon(Icons.arrow_back),
-
-                                label: const Text('Previous'),
-
-                                style: OutlinedButton.styleFrom(
-
-                                  padding: const EdgeInsets.symmetric(
-
-                                      horizontal: 18, vertical: 14),
-
-                                  shape: RoundedRectangleBorder(
-
-                                      borderRadius: BorderRadius.circular(12)),
-
-                                ),
-
+                      // Header with progress
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                      'Step ${_currentQuestion + 1} of ${questions.length}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium),
+                                  const Spacer(),
+                                  Text('${(progress * 100).round()}%',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge),
+                                ],
                               ),
+                              const SizedBox(height: 12),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: LinearProgressIndicator(
+                                    value: progress, minHeight: 8),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
 
-                            if (!isFirst) const SizedBox(width: 12),
+                      // Animated question card
+                      Expanded(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          child: Card(
+                            key: ValueKey(
+                                q.fieldName), // forces fresh state per question
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: SingleChildScrollView(
+                                child: QuestionView(
+                                  key: ValueKey('view_${q.fieldName}'),
+                                  question: q,
+                                  answers: _answers,
+                                  onAnswerChanged: () => _onAnswerChanged(),
+                                  onRequestNext: () => _next(questions),
+                                  isEditMode: widget.uniqueId != null,
+                                  logicError: _logicError,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
 
-                            Expanded(
+                      const SizedBox(height: 12),
 
-                              child: FilledButton.icon(
-
-                                onPressed: canProceed
-
-                                    ? () => isLast
-
-                                        ? _showDone(context)
-
-                                        : _next(questions)
-
-                                    : null,
+                      // Nav bar
+                      Row(
+                        children: [
+                          if (!isFirst)
+                            OutlinedButton.icon(
+                              onPressed: _prev,
+                              icon: const Icon(Icons.arrow_back),
+                              label: const Text('Previous'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 18, vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          if (!isFirst) const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: canProceed
+                                  ? () => isLast
+                                      ? _showDone(context)
+                                      : _next(questions)
+                                  : null,
                               icon: Icon(
                                   isLast ? Icons.check : Icons.arrow_forward),
                               label: Text(isLast ? 'Finish' : 'Next'),
@@ -1277,6 +819,9 @@ class _SurveyScreenState extends State<SurveyScreen> {
     setState(() {
       _isSaving = true;
     });
+
+    // Update lastmod timestamp only when actually saving
+    AutoFields.touchLastMod(_answers);
 
     bool saveSuccessful = false;
     String? errorMessage;
