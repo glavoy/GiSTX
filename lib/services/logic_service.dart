@@ -12,8 +12,11 @@ class LogicService {
     }
 
     try {
-      // 1. Parse the main string into expression and message
-      final parts = expression.split(';');
+      // 1. Normalize whitespace (collapse newlines, tabs, multiple spaces into single spaces)
+      final normalizedExpression = expression.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+      // 2. Parse the main string into expression and message
+      final parts = normalizedExpression.split(';');
       if (parts.length != 2) {
         throw FormatException(
             'Logic check must be in the format "expression; \'message\'"');
@@ -46,7 +49,14 @@ class LogicService {
     // Handle OR clauses by splitting the expression and checking if any are true
     final orClauses =
         expression.split(RegExp(r'\s+or\s+', caseSensitive: false));
-    for (final orClause in orClauses) {
+    for (var orClause in orClauses) {
+      orClause = orClause.trim();
+
+      // Remove outer parentheses from the OR clause if present
+      if (orClause.startsWith('(') && orClause.endsWith(')')) {
+        orClause = orClause.substring(1, orClause.length - 1).trim();
+      }
+
       // Handle AND clauses within each OR clause
       final andClauses =
           orClause.split(RegExp(r'\s+and\s+', caseSensitive: false));
@@ -68,10 +78,16 @@ class LogicService {
 
   /// Evaluates a single condition like "field = 'value'" or "field1 <> field2"
   static bool _evaluateSingleCondition(String condition, AnswerMap answers) {
+    // Remove outer parentheses if present
+    condition = condition.trim();
+    if (condition.startsWith('(') && condition.endsWith(')')) {
+      condition = condition.substring(1, condition.length - 1).trim();
+    }
+
     // Regex to capture: (field_name) (operator) (value)
     // The value can be a quoted string or another field name.
     // Handles operators like =, <>, <=, >=, <, >
-    final regex = RegExp(r'^\s*\(?([\w_]+)\s*([<>=!]+)\s*([\w_]+)\)?\s*$');
+    final regex = RegExp(r"^\s*([\w_]+)\s*([<>=!]+)\s*('[\w_]+'|[\w_]+)\s*$");
     final match = regex.firstMatch(condition);
 
     if (match == null) {
