@@ -8,12 +8,14 @@ import '../services/skip_service.dart';
 import '../config/app_config.dart';
 
 class SurveyScreen extends StatefulWidget {
+  final String questionnaireFilename;
   final Map<String, dynamic>? existingAnswers;
   final String? uniqueId;
   final List<String>? primaryKeyFields;
 
   const SurveyScreen({
     super.key,
+    required this.questionnaireFilename,
     this.existingAnswers,
     this.uniqueId,
     this.primaryKeyFields,
@@ -39,7 +41,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
       // 2) load questions for UI from the survey XML
       // The database tables are pre-created by another app, so we just load the XML
-      final questions = await SurveyLoader.loadFromAsset(AppConfig.surveyAssetPath);
+      final assetPath = 'assets/surveys/${widget.questionnaireFilename}';
+      final questions = await SurveyLoader.loadFromAsset(assetPath);
 
       // 3) If we're editing an existing record, populate answers from the database
       if (widget.existingAnswers != null) {
@@ -53,7 +56,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
       // but warn the user
       debugPrint('Warning: Database initialization failed: $e');
       debugPrint('Survey will load but data cannot be saved.');
-      return SurveyLoader.loadFromAsset(AppConfig.surveyAssetPath);
+      final assetPath = 'assets/surveys/${widget.questionnaireFilename}';
+      return SurveyLoader.loadFromAsset(assetPath);
     }
   }
 
@@ -712,7 +716,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
       if (widget.uniqueId != null) {
         // Update existing record
         await DbService.updateInterview(
-          surveyFilename: AppConfig.surveyFilename,
+          surveyFilename: widget.questionnaireFilename,
           answers: _answers,
           uniqueId: widget.uniqueId!,
           originalAnswers: _originalAnswers,
@@ -720,7 +724,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
       } else {
         // Insert new record
         await DbService.saveInterview(
-          surveyFilename: AppConfig.surveyFilename,
+          surveyFilename: widget.questionnaireFilename,
           answers: _answers,
         );
       }

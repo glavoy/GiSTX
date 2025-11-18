@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import '../services/db_service.dart';
-import '../config/app_config.dart';
 import 'survey_screen.dart';
 
 /// Screen for selecting an existing record to view/modify
 class RecordSelectorScreen extends StatefulWidget {
-  const RecordSelectorScreen({super.key});
+  final String questionnaireFilename;
+
+  const RecordSelectorScreen({
+    super.key,
+    required this.questionnaireFilename,
+  });
 
   @override
   State<RecordSelectorScreen> createState() => _RecordSelectorScreenState();
@@ -35,7 +39,7 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
     try {
       await DbService.init();
       final tableName =
-          AppConfig.surveyFilename.toLowerCase().replaceAll('.xml', '');
+          widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
       final pkFields = await DbService.getPrimaryKeyFields(tableName);
       final records = await DbService.getExistingRecords(tableName);
 
@@ -123,6 +127,7 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => SurveyScreen(
+          questionnaireFilename: widget.questionnaireFilename,
           existingAnswers: record,
           uniqueId: uniqueId,
           primaryKeyFields: data.primaryKeyFields,

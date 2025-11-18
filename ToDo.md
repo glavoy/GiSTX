@@ -4,6 +4,7 @@
 - add 'does not contain' and contains
 - add logic checks - multiple
 - add multiple skips
+- add number in crfs table for the order of the crfs to be displayed
 - commetns fiewld should be optional
 - add 'modifying survey' - change auto variables
 - add logic for date ranges: +/- day(s)/month(s)/year(s) - gist config
@@ -20,6 +21,7 @@
 - datetime stamp - is it local time - it looks like GMT
 - added comments filed - should always be there - make it optional
 - Add time type to gistx
+- add 'help' screen to gistcongigx so user can see all of the options
 
 ## GistXConfig
 - look at the code for parsing skips - add multiple logic: if xxx = 1 and yyy < 5, then skip to...
