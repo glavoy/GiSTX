@@ -473,6 +473,11 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
     bool _isAnswered(Question q) {
 
+      // Special case: 'comments' field is always optional
+      if (q.fieldName.toLowerCase() == 'comments') {
+        return true;
+      }
+
       final val = _answers[q.fieldName];
 
       switch (q.type) {
