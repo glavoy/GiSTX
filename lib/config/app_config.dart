@@ -11,7 +11,8 @@ class AppConfig {
   // Database configuration
   // Set to null to use the default application support directory
   // Set to a specific path to use a custom location (e.g., 'C:\\GiSTX\\Data\\gistx.sqlite')
-  static const String? customDatabasePath = 'C:\\gistx\\database\\gistx.sqlite';
+  static const String? customDatabasePath =
+      'C:\\gistx\\database\\gistx_config.sqlite';
 
   // Default database filename (used if customDatabasePath is null)
   static const String databaseFilename = 'gistx.sqlite';
