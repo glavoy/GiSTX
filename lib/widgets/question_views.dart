@@ -244,7 +244,6 @@ class _QuestionViewState extends State<QuestionView> {
               _textError = _validateText(val);
             });
             widget.answers[q.fieldName] = val;
-            AutoFields.touchLastMod(widget.answers);
             widget.onAnswerChanged?.call();
           },
         ),
@@ -274,7 +273,6 @@ class _QuestionViewState extends State<QuestionView> {
                 setState(() {
                   _radioSelection = val;
                   widget.answers[q.fieldName] = val;
-                  AutoFields.touchLastMod(widget.answers);
                 });
                 widget.onAnswerChanged?.call();
               },
@@ -332,7 +330,6 @@ class _QuestionViewState extends State<QuestionView> {
                       _checkboxSelection.remove(opt.value);
                     }
                     widget.answers[q.fieldName] = _checkboxSelection.toList();
-                    AutoFields.touchLastMod(widget.answers);
                   });
                   widget.onAnswerChanged?.call();
                 },
@@ -378,7 +375,6 @@ class _QuestionViewState extends State<QuestionView> {
               setState(() {
                 _comboboxSelection = val;
                 widget.answers[q.fieldName] = val;
-                AutoFields.touchLastMod(widget.answers);
               });
               widget.onAnswerChanged?.call();
             },
@@ -412,7 +408,6 @@ class _QuestionViewState extends State<QuestionView> {
                 _selectedDate = picked;
                 // For 'date' type, store as 'YYYY-MM-DD' string
                 widget.answers[q.fieldName] = picked.toIso8601String().split('T')[0];
-                AutoFields.touchLastMod(widget.answers);
               });
               widget.onAnswerChanged?.call();
             }
@@ -459,7 +454,6 @@ class _QuestionViewState extends State<QuestionView> {
                         setState(() {
                           _selectedDate = null;
                           widget.answers[q.fieldName] = q.dontKnow;
-                          AutoFields.touchLastMod(widget.answers);
                         });
                         widget.onAnswerChanged?.call();
                       },
@@ -491,7 +485,6 @@ class _QuestionViewState extends State<QuestionView> {
                         setState(() {
                           _selectedDate = null;
                           widget.answers[q.fieldName] = q.refuse;
-                          AutoFields.touchLastMod(widget.answers);
                         });
                         widget.onAnswerChanged?.call();
                       },
@@ -552,7 +545,6 @@ class _QuestionViewState extends State<QuestionView> {
                 setState(() {
                   _selectedDateTime = combined;
                   widget.answers[q.fieldName] = combined;
-                  AutoFields.touchLastMod(widget.answers);
                 });
                 widget.onAnswerChanged?.call();
               }
