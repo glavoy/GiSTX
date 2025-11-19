@@ -1,7 +1,6 @@
 ### To Do
 - add the name of the project to the DD - no hard coding in the app
 - add DB logic to check if all the fields exist in the database - based on the xml file - if not add new fields - this is now automatic
-- do not allow duplicate records for the primary key values - add 'unique' logic check
 - Add time type to gistx
 - upload to ftp server
 

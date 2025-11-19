@@ -48,6 +48,15 @@
 	</question>
 
 
+	<question type = 'text' fieldname = 'barcode2' fieldtype = 'text'>
+		<text>Re-enter the barcode</text>
+		<maxCharacters>4</maxCharacters>
+		<logic_check>
+			barcode2 &lt;&gt; barcode; 'The barcodes do not match'
+		</logic_check>
+	</question>
+
+
 	<question type = 'text' fieldname = 'comments' fieldtype = 'text'>
 		<text>Comments (optional)</text>
 		<maxCharacters>80</maxCharacters>

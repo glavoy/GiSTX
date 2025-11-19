@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert'; // For JSON parsing
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
@@ -7,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../config/app_config.dart';
 import '../models/question.dart';
+import 'survey_loader.dart';
 
 class DbService {
   static Database? _db;
@@ -59,9 +61,97 @@ class DbService {
 
       // Open the database
       _db = await openDatabase(dbPath);
+
+      // Sync database schema with XML definitions
+      await _syncDatabaseSchema();
     } catch (e) {
       _logError('Failed to initialize database: $e');
       rethrow;
+    }
+  }
+
+  /// Sync the database schema with the XML survey definitions
+  static Future<void> _syncDatabaseSchema() async {
+    try {
+      _log('Starting database schema sync...');
+      
+      // Load AssetManifest to find all XML files in assets/surveys/
+      final manifestContent = await rootBundle.loadString('AssetManifest.json');
+      final Map<String, dynamic> manifestMap = json.decode(manifestContent);
+      
+      final surveyFiles = manifestMap.keys
+          .where((String key) => key.startsWith('assets/surveys/') && key.endsWith('.xml'))
+          .toList();
+
+      _log('Found ${surveyFiles.length} survey files: $surveyFiles');
+
+      for (final assetPath in surveyFiles) {
+        final filename = p.basename(assetPath);
+        final tableName = filename.toLowerCase().replaceAll('.xml', '');
+        
+        _log('Checking schema for $tableName ($filename)...');
+        
+        // Load questions
+        final questions = await SurveyLoader.loadFromAsset(assetPath);
+        
+        // Filter data questions
+        final dataQuestions = questions.where((q) => q.type != QuestionType.information).toList();
+        _log('Loaded ${dataQuestions.length} data questions for $tableName');
+        
+        if (dataQuestions.isEmpty) continue;
+
+        // Check if table exists
+        final tableExists = await _tableExists(tableName);
+        
+        if (!tableExists) {
+          _log('Table $tableName does not exist. Creating...');
+          // Create table with data questions
+          final buffer = StringBuffer();
+          buffer.write('CREATE TABLE $tableName (');
+          
+          final colDefs = <String>[];
+          for (final q in dataQuestions) {
+            colDefs.add('${q.fieldName} ${_getSqlType(q)}');
+          }
+          
+          buffer.write(colDefs.join(', '));
+          buffer.write(')');
+          
+          await _db!.execute(buffer.toString());
+          _log('Table $tableName created.');
+        } else {
+          // Table exists, check columns
+          final existingColumns = await _getTableColumns(tableName);
+          _log('Existing columns in $tableName: $existingColumns');
+          
+          for (final q in dataQuestions) {
+            if (!existingColumns.contains(q.fieldName.toLowerCase())) {
+              _log('Column ${q.fieldName} missing in $tableName. Adding...');
+              final sqlType = _getSqlType(q);
+              try {
+                await _db!.execute('ALTER TABLE $tableName ADD COLUMN ${q.fieldName} $sqlType');
+                _log('Successfully added column ${q.fieldName}');
+              } catch (e) {
+                _logError('Failed to add column ${q.fieldName}: $e');
+              }
+            }
+          }
+        }
+      }
+      _log('Database schema sync completed.');
+    } catch (e) {
+      _logError('Error syncing schema: $e');
+    }
+  }
+
+  static String _getSqlType(Question q) {
+    final ft = q.fieldType.toLowerCase();
+    if (ft == 'integer' || ft == 'text_integer') {
+      return 'INTEGER';
+    } else if (ft == 'text_decimal' || ft == 'real') {
+      return 'REAL';
+    } else {
+      return 'TEXT';
     }
   }
 
