@@ -324,9 +324,21 @@ class _QuestionViewState extends State<QuestionView> {
                 tileColor: Colors.white,
                 onChanged: (val) {
                   setState(() {
+                    final isSpecial = opt.value == q.dontKnow || opt.value == q.refuse;
+
                     if (val == true) {
-                      _checkboxSelection.add(opt.value);
+                      if (isSpecial) {
+                        // If selecting a special option, clear everything else
+                        _checkboxSelection.clear();
+                        _checkboxSelection.add(opt.value);
+                      } else {
+                        // If selecting a normal option, remove any special options
+                        if (q.dontKnow != null) _checkboxSelection.remove(q.dontKnow);
+                        if (q.refuse != null) _checkboxSelection.remove(q.refuse);
+                        _checkboxSelection.add(opt.value);
+                      }
                     } else {
+                      // Deselecting is always allowed
                       _checkboxSelection.remove(opt.value);
                     }
                     widget.answers[q.fieldName] = _checkboxSelection.toList();

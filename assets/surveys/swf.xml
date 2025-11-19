@@ -70,6 +70,7 @@
 		<postskip>
 			<skip fieldname='withdrawreason' condition = '&lt;&gt;' response='5' response_type='fixed' skiptofieldname ='comments'></skip>
 		</postskip>
+		<dont_know>-7</dont_know>
 	</question>
 
 
