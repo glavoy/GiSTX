@@ -32,10 +32,16 @@ class SkipCondition {
   });
 }
 
+class UniqueCheck {
+  final String? message;
+
+  UniqueCheck({this.message});
+}
+
 class Question {
   final QuestionType type;
   final String fieldName;
-  final String fieldType; // e.g., integer, text, datetime
+  final String fieldType;
   final String? text;
   final int? maxCharacters;
   final NumericCheck? numericCheck;
@@ -47,6 +53,7 @@ class Question {
   final String? refuse;   // Special response value for "Refuse" (e.g., "-8")
   final String? minDate;  // Date range constraint (e.g., "-1y")
   final String? maxDate;  // Date range constraint (e.g., "+0d")
+  final UniqueCheck? uniqueCheck;
 
   Question({
     required this.type,
@@ -63,6 +70,7 @@ class Question {
     this.refuse,
     this.minDate,
     this.maxDate,
+    this.uniqueCheck,
   });
 }
 

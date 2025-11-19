@@ -39,6 +39,15 @@
 	</question>
 
 
+	<question type = 'text' fieldname = 'barcode' fieldtype = 'text'>
+		<text>Enter the barcode</text>
+		<maxCharacters>4</maxCharacters>
+		<unique_check>
+			<message>barcode will create duplicates</message>
+		</unique_check>
+	</question>
+
+
 	<question type = 'text' fieldname = 'comments' fieldtype = 'text'>
 		<text>Comments (optional)</text>
 		<maxCharacters>80</maxCharacters>
