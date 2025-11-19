@@ -2,9 +2,7 @@
 - add the name of the project to the DD - no hard coding in the app
 - ensure multiple skips are working
 - add logic for date ranges: +/- day(s)/month(s)/year(s) - gist config
-- add module for doing custom logic checks - or better yet, add them to the xml file and add more logic to the app
 - add DB logic to check if all the fields exist in the database - based on the xml file - if not add new fields - this is now automatic
-- when modifying survey - make the background a differnt colour - or add some kind of widget to make it clear
 - do not allow duplicate records for the primary key values - add 'unique' logic check
 - Add time type to gistx
 - for checkbox types, when don;t know or refuse, don;t allow other options

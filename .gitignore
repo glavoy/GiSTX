@@ -118,7 +118,7 @@ app.*.symbols
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
 
-# Geoff
+
 
 # Local IDE/editor files
 .idea/
@@ -129,3 +129,7 @@ app.*.symbols
 # Additional platform ephemeral directories
 windows/flutter/ephemeral/
 linux/flutter/ephemeral/
+
+
+# Geoff
+/assets/database/fake_survey.sqlite
