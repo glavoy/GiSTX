@@ -1,4 +1,6 @@
 // lib/services/db_service.dart
+import 'dart:io';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -14,16 +16,49 @@ class DbService {
   static Future<void> init() async {
     try {
       // Initialize FFI for desktop platforms
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        sqfliteFfiInit();
+        databaseFactory = databaseFactoryFfi;
+      }
 
-      // Set database path
-      final dbPath = AppConfig.customDatabasePath ??
-          p.join((await getApplicationSupportDirectory()).path,
-              AppConfig.databaseFilename);
+      // Determine the database path
+      String dbPath;
+      if (AppConfig.customDatabasePath != null) {
+        // Use custom path (Windows)
+        dbPath = AppConfig.customDatabasePath!;
+      } else {
+        // Use default internal path (Android/iOS)
+        final dir = await getApplicationDocumentsDirectory();
+        dbPath = p.join(dir.path, AppConfig.databaseFilename);
+      }
+
       _log('Using database path: $dbPath');
 
-      // Open the database (will fail if file doesn't exist)
+      // Check if we need to copy from assets (Mobile only usually, or if custom path missing)
+      // For Windows with custom path, we assume the file exists at that location as per user setup.
+      // For Android, we must copy it from assets if it doesn't exist in app docs.
+      if (AppConfig.customDatabasePath == null) {
+        if (!await File(dbPath).exists()) {
+          _log('Database not found at $dbPath. Copying from assets...');
+          try {
+            // Ensure parent directory exists
+            await Directory(p.dirname(dbPath)).create(recursive: true);
+
+            // Copy from assets
+            final data = await rootBundle.load('assets/database/fake_survey.sqlite');
+            final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+            await File(dbPath).writeAsBytes(bytes, flush: true);
+            _log('Database copied successfully.');
+          } catch (e) {
+            _logError('Failed to copy database from assets: $e');
+            // Fallback: let openDatabase create an empty one if copying fails?
+            // Or rethrow? Rethrowing is safer as we need the schema.
+            rethrow;
+          }
+        }
+      }
+
+      // Open the database
       _db = await openDatabase(dbPath);
     } catch (e) {
       _logError('Failed to initialize database: $e');
