@@ -247,50 +247,26 @@ class _SurveyScreenState extends State<SurveyScreen> {
     // Perform uniqueness check if configured
     if (currentQ.uniqueCheck != null) {
       final value = _answers[currentQ.fieldName]?.toString();
-      if (value != null && value.isNotEmpty) {
+      
+      // Get the original value (if any) to see if it changed
+      final originalValue = _originalAnswers?[currentQ.fieldName]?.toString();
+
+      // Only check if value is present AND it is different from the original
+      // If value == originalValue, it means the user hasn't changed it, 
+      // so it's valid (it's their own record).
+      if (value != null && value.isNotEmpty && value != originalValue) {
         final tableName =
             widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
-        
-        // Don't check uniqueness if we are in edit mode and the value hasn't changed?
-        // For now, we check always. If it's the SAME record, it will exist.
-        // Ideally we should exclude the current record ID from the check.
-        // But we don't easily have the primary key of the current record here unless passed.
-        // However, if this is a NEW record (widget.uniqueId == null), we definitely check.
-        // If it is an EXISTING record (widget.uniqueId != null), we might be re-entering the same value.
-        // Simple fix: If widget.uniqueId is NOT null, we assume we are editing and skip unique check 
-        // UNLESS we want to prevent changing it to ANOTHER existing value.
-        // Complex unique check: SELECT count(*) FROM table WHERE field = ? AND uniqueid != ?
-        
-        // For now, let's implement the basic check. 
-        // If the user is editing, they might trigger this on their own record.
-        // We need to handle that.
         
         bool isUnique = await DbService.isValueUnique(
             tableName, currentQ.fieldName, value);
             
-        // If we are editing, and the value exists, it might be OUR value.
-        // We need a way to check if it's a DIFFERENT record.
-        // Since we don't have a "check unique excluding ID" method yet, 
-        // and adding it requires knowing the PK column name (which varies),
-        // we will just run the check. 
-        // If it fails, we might block the user from saving their own record.
-        // CRITICAL: If widget.uniqueId != null, we should probably SKIP this check 
-        // OR implement a smarter check.
-        // Let's skip for now if in edit mode to avoid blocking valid edits.
-        // Or better: The user requested "prevent duplicated barcodes". 
-        // Usually barcodes are immutable PKs or unique fields.
-        
         if (!isUnique) {
-           // If we are in edit mode, we need to see if the found record is THIS record.
-           // But we don't have the logic here. 
-           // Let's assume for now this is primarily for NEW data entry.
-           if (widget.uniqueId == null) {
-              setState(() {
-                _logicError = currentQ.uniqueCheck!.message ??
-                    'This value already exists in the database.';
-              });
-              return;
-           }
+          setState(() {
+            _logicError = currentQ.uniqueCheck!.message ??
+                'This value already exists in the database.';
+          });
+          return;
         }
       }
     }
