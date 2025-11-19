@@ -95,6 +95,16 @@ class SurveyLoader {
         maxDate = maxDateNode?.innerText.trim();
       }
 
+      // Parse unique check
+      UniqueCheck? uniqueCheck;
+      final uniqueCheckNode = q.getElement('unique_check');
+      if (uniqueCheckNode != null) {
+        final messageNode = uniqueCheckNode.getElement('message');
+        uniqueCheck = UniqueCheck(
+          message: messageNode?.innerText.trim(),
+        );
+      }
+
       questions.add(
         Question(
           type: type,
@@ -111,6 +121,7 @@ class SurveyLoader {
           refuse: refuse,
           minDate: minDate,
           maxDate: maxDate,
+          uniqueCheck: uniqueCheck,
         ),
       );
     }

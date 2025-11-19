@@ -1,13 +1,12 @@
-// lib/services/db_service.dart
 import 'dart:io';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
-import '../models/question.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import '../config/app_config.dart';
+import '../models/question.dart';
 
 class DbService {
   static Database? _db;
@@ -384,6 +383,22 @@ class DbService {
       return value.toIso8601String();
     } else {
       return value.toString();
+    }
+  }
+
+  /// Check if a value is unique in the given table and column
+  static Future<bool> isValueUnique(
+      String tableName, String columnName, String value) async {
+    if (_db == null) await init();
+    try {
+      final count = Sqflite.firstIntValue(await _db!.rawQuery(
+        'SELECT COUNT(*) FROM $tableName WHERE $columnName = ?',
+        [value],
+      ));
+      return (count ?? 0) == 0;
+    } catch (e) {
+      _logError('Error checking uniqueness: $e');
+      return true; 
     }
   }
 
