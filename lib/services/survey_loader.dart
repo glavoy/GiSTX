@@ -70,6 +70,19 @@ class SurveyLoader {
       final refuseNode = q.getElement('refuse');
       final refuse = refuseNode?.innerText.trim();
 
+      // Auto-add special options if they don't exist in the list
+      if (dontKnow != null && dontKnow.isNotEmpty) {
+        if (!options.any((opt) => opt.value == dontKnow)) {
+          options.add(QuestionOption(value: dontKnow, label: "Don't know"));
+        }
+      }
+
+      if (refuse != null && refuse.isNotEmpty) {
+        if (!options.any((opt) => opt.value == refuse)) {
+          options.add(QuestionOption(value: refuse, label: "Refuse to answer"));
+        }
+      }
+
       // Parse date range
       String? minDate;
       String? maxDate;
