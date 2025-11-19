@@ -510,7 +510,9 @@ class _SurveyScreenState extends State<SurveyScreen> {
         final progress = (_currentQuestion + 1) / questions.length;
 
         return Scaffold(
+          backgroundColor: widget.uniqueId != null ? Colors.blueGrey.shade50 : null,
           appBar: AppBar(
+            backgroundColor: widget.uniqueId != null ? Colors.blueGrey.shade50 : null,
             toolbarHeight: 120,
             automaticallyImplyLeading: false,
             title: Row(
