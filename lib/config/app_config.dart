@@ -19,7 +19,7 @@ class AppConfig {
   // NOTE: Custom path only works on Windows/Desktop. On Android/iOS it will be ignored.
   static String? get customDatabasePath {
     if (Platform.isWindows) {
-      return 'C:\\gistx\\database\\fake_survey.sqlite';
+      return 'C:\\gistx\\database\\household_survey.sqlite';
     }
     return null; // Use default internal storage for mobile
   }

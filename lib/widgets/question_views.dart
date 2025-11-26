@@ -221,7 +221,7 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         TextField(
           controller: _textController,
           focusNode: _textFocusNode,
@@ -255,7 +255,7 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         if (widget.logicError != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -298,7 +298,7 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         if (widget.logicError != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -357,7 +357,7 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         if (widget.logicError != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0, left: 12.0),
@@ -409,7 +409,7 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         InkWell(
           onTap: () async {
             // Calculate date limits
@@ -553,7 +553,7 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(q.text!),
+        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         InkWell(
           onTap: () async {
             final pickedDate = await showDatePicker(
@@ -658,7 +658,7 @@ class _QuestionViewState extends State<QuestionView> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionTitle(q.text ?? 'Automatic: ${q.fieldName}'),
+            _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text ?? 'Automatic: ${q.fieldName}', widget.answers)),
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,

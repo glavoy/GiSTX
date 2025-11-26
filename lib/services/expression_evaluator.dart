@@ -7,10 +7,12 @@ class ExpressionEvaluator {
   /// Returns true if the expression evaluates to true, otherwise false.
   static bool evaluate(String expression, AnswerMap answers) {
     // Handle OR clauses by splitting the expression and checking if any are true
-    final orClauses = expression.split(RegExp(r'\s+or\s+', caseSensitive: false));
+    final Pattern orPattern = RegExp(r'\s+or\s+', caseSensitive: false);
+    final orClauses = expression.split(orPattern);
     for (final orClause in orClauses) {
       // Handle AND clauses within each OR clause
-      final andClauses = orClause.split(RegExp(r'\s+and\s+', caseSensitive: false));
+      final Pattern andPattern = RegExp(r'\s+and\s+', caseSensitive: false);
+      final andClauses = orClause.split(andPattern);
       bool isAndClauseTrue = true;
       for (final andClause in andClauses) {
         // If any AND condition is false, the whole AND clause is false
@@ -32,8 +34,10 @@ class ExpressionEvaluator {
     // Regex to capture: (field_name) (operator) (value)
     // The value can be a quoted string or another field name.
     // Handles operators like =, <>, <=, >=, <, >, contains, does not contain
-    final regex = RegExp(r"^\s*\(?([\w_]+)\s*(==|!=|<>|<=|>=|<|>|contains|does not contain)\s*([\w_'\s]+)\)?\s*$");
-    final match = regex.firstMatch(condition);
+    final Pattern pattern = RegExp(
+        r"^\s*\(?([\w_]+)\s*(==|!=|<>|<=|>=|<|>|contains|does not contain)\s*([\w_'\s]+)\)?\s*$");
+    final matches = pattern.allMatches(condition);
+    final match = matches.isEmpty ? null : matches.first;
 
     if (match == null) {
       throw FormatException('Invalid condition format: "$condition"');

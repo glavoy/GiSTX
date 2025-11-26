@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:convert'; // For JSON parsing
+
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
@@ -46,8 +46,10 @@ class DbService {
             await Directory(p.dirname(dbPath)).create(recursive: true);
 
             // Copy from assets
-            final data = await rootBundle.load('assets/database/fake_survey.sqlite');
-            final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+            final data =
+                await rootBundle.load('assets/database/fake_survey.sqlite');
+            final bytes =
+                data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
             await File(dbPath).writeAsBytes(bytes, flush: true);
             _log('Database copied successfully.');
           } catch (e) {
@@ -74,13 +76,15 @@ class DbService {
   static Future<void> _syncDatabaseSchema() async {
     try {
       _log('Starting database schema sync...');
-      
+
       // Load AssetManifest to find all XML files in assets/surveys/
-      final manifestContent = await rootBundle.loadString('AssetManifest.json');
-      final Map<String, dynamic> manifestMap = json.decode(manifestContent);
-      
-      final surveyFiles = manifestMap.keys
-          .where((String key) => key.startsWith('assets/surveys/') && key.endsWith('.xml'))
+      // Load AssetManifest to find all XML files in assets/surveys/
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+
+      final surveyFiles = manifest
+          .listAssets()
+          .where((String key) =>
+              key.startsWith('assets/surveys/') && key.endsWith('.xml'))
           .toList();
 
       _log('Found ${surveyFiles.length} survey files: $surveyFiles');
@@ -88,48 +92,50 @@ class DbService {
       for (final assetPath in surveyFiles) {
         final filename = p.basename(assetPath);
         final tableName = filename.toLowerCase().replaceAll('.xml', '');
-        
+
         _log('Checking schema for $tableName ($filename)...');
-        
+
         // Load questions
         final questions = await SurveyLoader.loadFromAsset(assetPath);
-        
+
         // Filter data questions
-        final dataQuestions = questions.where((q) => q.type != QuestionType.information).toList();
+        final dataQuestions =
+            questions.where((q) => q.type != QuestionType.information).toList();
         _log('Loaded ${dataQuestions.length} data questions for $tableName');
-        
+
         if (dataQuestions.isEmpty) continue;
 
         // Check if table exists
         final tableExists = await _tableExists(tableName);
-        
+
         if (!tableExists) {
           _log('Table $tableName does not exist. Creating...');
           // Create table with data questions
           final buffer = StringBuffer();
           buffer.write('CREATE TABLE $tableName (');
-          
+
           final colDefs = <String>[];
           for (final q in dataQuestions) {
             colDefs.add('${q.fieldName} ${_getSqlType(q)}');
           }
-          
+
           buffer.write(colDefs.join(', '));
           buffer.write(')');
-          
+
           await _db!.execute(buffer.toString());
           _log('Table $tableName created.');
         } else {
           // Table exists, check columns
           final existingColumns = await _getTableColumns(tableName);
           _log('Existing columns in $tableName: $existingColumns');
-          
+
           for (final q in dataQuestions) {
             if (!existingColumns.contains(q.fieldName.toLowerCase())) {
               _log('Column ${q.fieldName} missing in $tableName. Adding...');
               final sqlType = _getSqlType(q);
               try {
-                await _db!.execute('ALTER TABLE $tableName ADD COLUMN ${q.fieldName} $sqlType');
+                await _db!.execute(
+                    'ALTER TABLE $tableName ADD COLUMN ${q.fieldName} $sqlType');
                 _log('Successfully added column ${q.fieldName}');
               } catch (e) {
                 _logError('Failed to add column ${q.fieldName}: $e');
@@ -317,6 +323,48 @@ class DbService {
     }
   }
 
+  /// Get the next linenum for a specific primary key value
+  /// Returns 1 if no records exist, otherwise returns max(linenum) + 1
+  /// primaryKeyField: the name of the primary key field (e.g., 'hhid')
+  /// primaryKeyValue: the value to filter by (e.g., 'SP01001')
+  static Future<int> getNextLineNum({
+    required String tableName,
+    required String primaryKeyField,
+    required String primaryKeyValue,
+  }) async {
+    if (_db == null) {
+      _logError('Database not initialized');
+      return 1;
+    }
+
+    try {
+      final tableExists = await _tableExists(tableName);
+      if (!tableExists) {
+        _logError('Table $tableName does not exist');
+        return 1;
+      }
+
+      // Query for the maximum linenum where primary key matches
+      final results = await _db!.rawQuery(
+        'SELECT MAX(linenum) as maxLineNum FROM $tableName WHERE $primaryKeyField = ?',
+        [primaryKeyValue],
+      );
+
+      if (results.isEmpty || results.first['maxLineNum'] == null) {
+        _log('No existing records for $primaryKeyField=$primaryKeyValue, returning linenum=1');
+        return 1;
+      }
+
+      final maxLineNum = results.first['maxLineNum'] as int;
+      final nextLineNum = maxLineNum + 1;
+      _log('Found max linenum=$maxLineNum for $primaryKeyField=$primaryKeyValue, returning $nextLineNum');
+      return nextLineNum;
+    } catch (e) {
+      _logError('Error getting next linenum for $tableName: $e');
+      return 1;
+    }
+  }
+
   /// Update an existing interview record
   /// Uses uniqueid to identify the record to update
   /// Also records all changes in the formchanges table
@@ -398,7 +446,8 @@ class DbService {
             'Failed to update record: no record found with uniqueid=$uniqueId');
       }
 
-      _log('Updated $updateCount record(s) in $tableName with uniqueid=$uniqueId');
+      _log(
+          'Updated $updateCount record(s) in $tableName with uniqueid=$uniqueId');
     } catch (e) {
       final errorMsg = 'Failed to update interview in "$tableName": $e';
       _logError(errorMsg);
@@ -422,7 +471,8 @@ class DbService {
       // Check if formchanges table exists
       final formChangesExists = await _tableExists('formchanges');
       if (!formChangesExists) {
-        _logError('formchanges table does not exist - skipping change tracking');
+        _logError(
+            'formchanges table does not exist - skipping change tracking');
         return;
       }
 
@@ -453,7 +503,8 @@ class DbService {
             'changed_at': DateTime.now().toIso8601String(),
           });
           changeCount++;
-          _log('Recorded change: $fieldName from "$oldValueStr" to "$newValueStr"');
+          _log(
+              'Recorded change: $fieldName from "$oldValueStr" to "$newValueStr"');
         }
       }
 
@@ -488,7 +539,7 @@ class DbService {
       return (count ?? 0) == 0;
     } catch (e) {
       _logError('Error checking uniqueness: $e');
-      return true; 
+      return true;
     }
   }
 
@@ -498,7 +549,8 @@ class DbService {
 
     try {
       final result = await _db!.rawQuery('PRAGMA table_info($tableName)');
-      final columns = result.map((row) => (row['name'] as String).toLowerCase()).toList();
+      final columns =
+          result.map((row) => (row['name'] as String).toLowerCase()).toList();
       return columns;
     } catch (e) {
       _logError('Error getting table columns: $e');

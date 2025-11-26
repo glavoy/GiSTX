@@ -73,6 +73,11 @@ class _SurveyScreenState extends State<SurveyScreen> {
         debugPrint('Prepopulated answers: ${widget.prepopulatedAnswers}');
       }
 
+      // 5) Calculate linenum if needed (for new records only)
+      if (widget.existingAnswers == null) {
+        await _calculateLineNum(questions);
+      }
+
       return questions;
     } catch (e) {
       // If database initialization fails, still allow viewing the survey
@@ -155,6 +160,54 @@ class _SurveyScreenState extends State<SurveyScreen> {
       }
     }
     return copy;
+  }
+
+  /// Calculate linenum for the current record based on primary key
+  Future<void> _calculateLineNum(List<Question> questions) async {
+    try {
+      // Check if this survey has a linenum field
+      final hasLineNum = questions.any((q) => q.fieldName == 'linenum');
+      if (!hasLineNum) {
+        return; // No linenum field in this survey
+      }
+
+      // Get the table name
+      final tableName = widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
+
+      // Get the primary key fields from the CRFs table
+      final primaryKeyFields = await DbService.getPrimaryKeyFields(tableName);
+
+      if (primaryKeyFields.isEmpty) {
+        debugPrint('No primary key fields found for $tableName, defaulting linenum to 1');
+        _answers['linenum'] = '1';
+        return;
+      }
+
+      // The first field in the primary key is the base field (e.g., hhid)
+      final primaryKeyField = primaryKeyFields.first;
+
+      // Get the value of the primary key field from answers
+      final primaryKeyValue = _answers[primaryKeyField];
+
+      if (primaryKeyValue == null || primaryKeyValue.toString().isEmpty) {
+        debugPrint('Primary key field $primaryKeyField not set, defaulting linenum to 1');
+        _answers['linenum'] = '1';
+        return;
+      }
+
+      // Query the database for the next linenum
+      final nextLineNum = await DbService.getNextLineNum(
+        tableName: tableName,
+        primaryKeyField: primaryKeyField,
+        primaryKeyValue: primaryKeyValue.toString(),
+      );
+
+      _answers['linenum'] = nextLineNum.toString();
+      debugPrint('Calculated linenum=$nextLineNum for $primaryKeyField=${primaryKeyValue.toString()}');
+    } catch (e) {
+      debugPrint('Error calculating linenum: $e');
+      _answers['linenum'] = '1'; // Default to 1 on error
+    }
   }
 
   /// Check if answers have been modified compared to original
