@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/db_service.dart';
@@ -66,13 +65,13 @@ class _QuestionnaireSelectorScreenState
       await DbService.init();
 
       // 2. Load the asset manifest to find all XML files in surveys directory
-      final manifestContent = await rootBundle.loadString('AssetManifest.json');
-      final Map<String, dynamic> manifestMap = json.decode(manifestContent);
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
 
       // 3. Get all XML filenames from assets
       final Set<String> availableXmlFiles = {};
-      for (final assetPath in manifestMap.keys) {
-        if (assetPath.startsWith('assets/surveys/') && assetPath.endsWith('.xml')) {
+      for (final assetPath in manifest.listAssets()) {
+        if (assetPath.startsWith('assets/surveys/') &&
+            assetPath.endsWith('.xml')) {
           // Extract just the filename (e.g., "baseline.xml" from "assets/surveys/baseline.xml")
           final filename = assetPath.substring('assets/surveys/'.length);
           availableXmlFiles.add(filename);
@@ -242,12 +241,14 @@ class _QuestionnaireSelectorScreenState
                         child: ListView.builder(
                           itemCount: _availableQuestionnaires.length,
                           itemBuilder: (context, index) {
-                            final questionnaire = _availableQuestionnaires[index];
+                            final questionnaire =
+                                _availableQuestionnaires[index];
 
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
                               child: InkWell(
-                                onTap: () => _onQuestionnaireSelected(questionnaire),
+                                onTap: () =>
+                                    _onQuestionnaireSelected(questionnaire),
                                 child: Padding(
                                   padding: const EdgeInsets.all(16.0),
                                   child: Row(
