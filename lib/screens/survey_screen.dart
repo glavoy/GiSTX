@@ -8,6 +8,7 @@ import '../services/skip_service.dart';
 import '../config/app_config.dart';
 import '../services/id_generator.dart';
 import '../services/logic_service.dart';
+import '../services/survey_config_service.dart';
 
 class SurveyScreen extends StatefulWidget {
   final String questionnaireFilename;
@@ -17,8 +18,8 @@ class SurveyScreen extends StatefulWidget {
   final Map<String, dynamic>? prepopulatedAnswers;
   final String? idConfig;
   final String? linkingField;
-  final int? repeatIndex;        // Current iteration (e.g., 2)
-  final int? repeatTotal;        // Total iterations (e.g., 5)
+  final int? repeatIndex; // Current iteration (e.g., 2)
+  final int? repeatTotal; // Total iterations (e.g., 5)
 
   const SurveyScreen({
     super.key,
@@ -60,9 +61,23 @@ class _SurveyScreenState extends State<SurveyScreen> {
       // 1) init DB
       await DbService.init();
 
+      // Get active survey ID
+      final surveyConfig = SurveyConfigService();
+      final surveyId = await surveyConfig.getActiveSurveyId();
+      if (surveyId == null) {
+        throw Exception('No active survey found');
+      }
+
       // 2) load questions for UI from the survey XML
-      // The database tables are pre-created by another app, so we just load the XML
-      final assetPath = 'assets/surveys/${widget.questionnaireFilename}';
+      // Get the asset path from the survey config service
+      final assetPath = await surveyConfig
+          .getQuestionnaireAssetPath(widget.questionnaireFilename);
+
+      if (assetPath == null) {
+        throw Exception(
+            'No survey configured. Please configure settings first.');
+      }
+
       final questions = await SurveyLoader.loadFromAsset(assetPath);
 
       // 3) If we're editing an existing record, populate answers from the database
@@ -88,7 +103,16 @@ class _SurveyScreenState extends State<SurveyScreen> {
       // but warn the user
       debugPrint('Warning: Database initialization failed: $e');
       debugPrint('Survey will load but data cannot be saved.');
-      final assetPath = 'assets/surveys/${widget.questionnaireFilename}';
+
+      final surveyConfig = SurveyConfigService();
+      final assetPath = await surveyConfig
+          .getQuestionnaireAssetPath(widget.questionnaireFilename);
+
+      if (assetPath == null) {
+        throw Exception(
+            'No survey configured. Please configure settings first.');
+      }
+
       return SurveyLoader.loadFromAsset(assetPath);
     }
   }
@@ -176,13 +200,19 @@ class _SurveyScreenState extends State<SurveyScreen> {
       }
 
       // Get the table name
-      final tableName = widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
+      final tableName =
+          widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
 
       // Get the primary key fields from the CRFs table
-      final primaryKeyFields = await DbService.getPrimaryKeyFields(tableName);
+      final surveyId = await SurveyConfigService().getActiveSurveyId();
+      if (surveyId == null) return;
+
+      final primaryKeyFields =
+          await DbService.getPrimaryKeyFields(surveyId, tableName);
 
       if (primaryKeyFields.isEmpty) {
-        debugPrint('No primary key fields found for $tableName, defaulting linenum to 1');
+        debugPrint(
+            'No primary key fields found for $tableName, defaulting linenum to 1');
         _answers['linenum'] = '1';
         return;
       }
@@ -194,20 +224,23 @@ class _SurveyScreenState extends State<SurveyScreen> {
       final primaryKeyValue = _answers[primaryKeyField];
 
       if (primaryKeyValue == null || primaryKeyValue.toString().isEmpty) {
-        debugPrint('Primary key field $primaryKeyField not set, defaulting linenum to 1');
+        debugPrint(
+            'Primary key field $primaryKeyField not set, defaulting linenum to 1');
         _answers['linenum'] = '1';
         return;
       }
 
       // Query the database for the next linenum
       final nextLineNum = await DbService.getNextLineNum(
+        surveyId: surveyId,
         tableName: tableName,
         primaryKeyField: primaryKeyField,
         primaryKeyValue: primaryKeyValue.toString(),
       );
 
       _answers['linenum'] = nextLineNum.toString();
-      debugPrint('Calculated linenum=$nextLineNum for $primaryKeyField=${primaryKeyValue.toString()}');
+      debugPrint(
+          'Calculated linenum=$nextLineNum for $primaryKeyField=${primaryKeyValue.toString()}');
     } catch (e) {
       debugPrint('Error calculating linenum: $e');
       _answers['linenum'] = '1'; // Default to 1 on error
@@ -316,15 +349,18 @@ class _SurveyScreenState extends State<SurveyScreen> {
         final tableName =
             widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
 
-        bool isUnique =
-            await DbService.isValueUnique(tableName, currentQ.fieldName, value);
+        final surveyId = await SurveyConfigService().getActiveSurveyId();
+        if (surveyId != null) {
+          bool isUnique = await DbService.isValueUnique(
+              surveyId, tableName, currentQ.fieldName, value);
 
-        if (!isUnique) {
-          setState(() {
-            _logicError = currentQ.uniqueCheck!.message ??
-                'This value already exists in the database.';
-          });
-          return;
+          if (!isUnique) {
+            setState(() {
+              _logicError = currentQ.uniqueCheck!.message ??
+                  'This value already exists in the database.';
+            });
+            return;
+          }
         }
       }
     }
@@ -622,7 +658,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
                       TextButton(
                         onPressed: () {
                           Navigator.of(context).pop(); // Close dialog
-                          Navigator.of(context).pop(false); // Return false to indicate cancelled
+                          Navigator.of(context)
+                              .pop(false); // Return false to indicate cancelled
                         },
                         child: const Text('Yes'),
                       ),
@@ -633,7 +670,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
             ),
             title: widget.repeatIndex != null && widget.repeatTotal != null
                 ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.blue.shade100,
                       borderRadius: BorderRadius.circular(20),
@@ -827,7 +865,12 @@ class _SurveyScreenState extends State<SurveyScreen> {
       // Generate the ID
       final tableName =
           widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
+
+      final surveyId = await SurveyConfigService().getActiveSurveyId();
+      if (surveyId == null) return;
+
       final generatedId = await IdGenerator.generateId(
+        surveyId: surveyId,
         tableName: tableName,
         idConfigJson: widget.idConfig!,
         answers: _answers,
@@ -887,10 +930,14 @@ class _SurveyScreenState extends State<SurveyScreen> {
     String? errorMessage;
 
     try {
+      final surveyId = await SurveyConfigService().getActiveSurveyId();
+      if (surveyId == null) throw Exception('No active survey found');
+
       // Determine if we're updating or inserting
       if (widget.uniqueId != null) {
         // Update existing record
         await DbService.updateInterview(
+          surveyId: surveyId,
           surveyFilename: widget.questionnaireFilename,
           answers: _answers,
           uniqueId: widget.uniqueId!,
@@ -899,6 +946,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
       } else {
         // Insert new record
         await DbService.saveInterview(
+          surveyId: surveyId,
           surveyFilename: widget.questionnaireFilename,
           answers: _answers,
         );
@@ -924,10 +972,14 @@ class _SurveyScreenState extends State<SurveyScreen> {
   /// Check if any child surveys should auto-repeat after this survey completes
   Future<void> _checkAndStartAutoRepeat(BuildContext context) async {
     try {
-      final tableName = widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
+      final tableName =
+          widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
+
+      final surveyId = await SurveyConfigService().getActiveSurveyId();
+      if (surveyId == null) return;
 
       // Get all CRF records to find child surveys
-      final allCrfs = await DbService.getExistingRecords('crfs');
+      final allCrfs = await DbService.getExistingRecords(surveyId, 'crfs');
 
       // Sort by display_order to ensure repeats happen in correct sequence
       final sortedCrfs = List<Map<String, dynamic>>.from(allCrfs);
@@ -948,7 +1000,6 @@ class _SurveyScreenState extends State<SurveyScreen> {
             parentTable == tableName &&
             repeatCountSource == tableName &&
             autoStartRepeat > 0) {
-
           // Get the repeat count field
           final repeatCountField = crf['repeat_count_field']?.toString();
           if (repeatCountField == null || repeatCountField.isEmpty) {
@@ -1033,10 +1084,9 @@ class _SurveyScreenState extends State<SurveyScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('Add Members Now?'),
-        content: Text(
-          'You indicated $count ${count == 1 ? 'person' : 'people'}.\n\n'
-          'Would you like to add them now?'
-        ),
+        content:
+            Text('You indicated $count ${count == 1 ? 'person' : 'people'}.\n\n'
+                'Would you like to add them now?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -1061,7 +1111,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
     Map<String, dynamic> crfConfig,
   ) async {
     final repeatCountField = crfConfig['repeat_count_field']?.toString();
-    final enforceCountMode = (crfConfig['repeat_enforce_count'] as int?) ?? 1; // Default to warn mode
+    final enforceCountMode = (crfConfig['repeat_enforce_count'] as int?) ??
+        1; // Default to warn mode
 
     int completedCount = 0;
 
@@ -1089,7 +1140,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
         // Check if we should enforce count
         if (enforceCountMode == 2) {
           // Force mode - must complete
-          final shouldContinue = await _showMustCompleteDialog(context, repeatCount, i);
+          final shouldContinue =
+              await _showMustCompleteDialog(context, repeatCount, i);
           if (shouldContinue) {
             i--; // Retry this iteration
             continue;
@@ -1119,13 +1171,15 @@ class _SurveyScreenState extends State<SurveyScreen> {
   }
 
   /// Show dialog when user must complete all members
-  Future<bool> _showMustCompleteDialog(BuildContext context, int total, int current) async {
+  Future<bool> _showMustCompleteDialog(
+      BuildContext context, int total, int current) async {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('Must Complete All Members'),
-        content: Text('You must add all $total members.\n\nCurrently on member $current of $total.'),
+        content: Text(
+            'You must add all $total members.\n\nCurrently on member $current of $total.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -1154,8 +1208,12 @@ class _SurveyScreenState extends State<SurveyScreen> {
     int enforceCountMode,
     String? repeatCountField,
   ) async {
+    final surveyId = await SurveyConfigService().getActiveSurveyId();
+    if (surveyId == null) return;
+
     // Get actual count from database
     final actualCount = await DbService.getRecordCount(
+      surveyId: surveyId,
       tableName: childTableName,
       where: '$linkingField = ?',
       whereArgs: [linkingValue],
@@ -1184,10 +1242,12 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
       if (action == 'update' && repeatCountField != null) {
         // Update the parent record's count field
-        final parentTableName = widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
+        final parentTableName =
+            widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
         final parentLinkingValue = _answers[linkingField];
 
         await DbService.updateField(
+          surveyId: surveyId,
           tableName: parentTableName,
           field: repeatCountField,
           value: actualCount,
@@ -1195,15 +1255,18 @@ class _SurveyScreenState extends State<SurveyScreen> {
           whereArgs: [parentLinkingValue],
         );
 
-        debugPrint('Updated $parentTableName.$repeatCountField to $actualCount');
+        debugPrint(
+            'Updated $parentTableName.$repeatCountField to $actualCount');
       }
     } else if (enforceCountMode == 3) {
       // Auto-sync mode - silently update parent record
       if (repeatCountField != null) {
-        final parentTableName = widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
+        final parentTableName =
+            widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
         final parentLinkingValue = _answers[linkingField];
 
         await DbService.updateField(
+          surveyId: surveyId,
           tableName: parentTableName,
           field: repeatCountField,
           value: actualCount,
@@ -1211,7 +1274,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
           whereArgs: [parentLinkingValue],
         );
 
-        debugPrint('Auto-synced $parentTableName.$repeatCountField to $actualCount');
+        debugPrint(
+            'Auto-synced $parentTableName.$repeatCountField to $actualCount');
       }
     }
 
@@ -1230,9 +1294,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Incomplete Data'),
         content: Text(
-          'You indicated $expected ${expected == 1 ? 'person' : 'people'} but only added $actual.\n\n'
-          'This will cause data quality issues.'
-        ),
+            'You indicated $expected ${expected == 1 ? 'person' : 'people'} but only added $actual.\n\n'
+            'This will cause data quality issues.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, 'force'),

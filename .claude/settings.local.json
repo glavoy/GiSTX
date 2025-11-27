@@ -3,7 +3,15 @@
     "allow": [
       "Bash(flutter analyze:*)",
       "Bash(dir:*)",
-      "Bash(flutter build:*)"
+      "Bash(flutter build:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(move enrollment.xml fake_household_survey )",
+      "Bash(move followup.xml fake_household_survey )",
+      "Bash(move hh_members.xml fake_household_survey )",
+      "Bash(move household.xml fake_household_survey )",
+      "Bash(move swf.xml fake_household_survey)",
+      "Bash(flutter clean:*)",
+      "Bash(flutter run:*)"
     ],
     "deny": [],
     "ask": []

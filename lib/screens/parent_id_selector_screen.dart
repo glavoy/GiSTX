@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/db_service.dart';
 import 'survey_screen.dart';
+import '../services/survey_config_service.dart';
 
 /// Screen for selecting a parent ID before starting a linked questionnaire
 ///
@@ -55,8 +56,14 @@ class _ParentIdSelectorScreenState extends State<ParentIdSelectorScreen> {
         _errorMessage = null;
       });
 
+      // Get active survey ID
+      final surveyConfig = SurveyConfigService();
+      final surveyId = await surveyConfig.getActiveSurveyId();
+      if (surveyId == null) throw Exception('No active survey found');
+
       // Get all records from the parent table
-      final records = await DbService.getExistingRecords(widget.parentTable);
+      final records =
+          await DbService.getExistingRecords(surveyId, widget.parentTable);
 
       // Extract unique linking field values
       final Set<String> ids = {};
@@ -144,8 +151,13 @@ class _ParentIdSelectorScreenState extends State<ParentIdSelectorScreen> {
       final tableName =
           widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
 
+      // Get active survey ID
+      final surveyConfig = SurveyConfigService();
+      final surveyId = await surveyConfig.getActiveSurveyId();
+      if (surveyId == null) return 1;
+
       // Get all records for this parent ID
-      final records = await DbService.getExistingRecords(tableName);
+      final records = await DbService.getExistingRecords(surveyId, tableName);
 
       // Find the maximum increment number for this parent ID
       int maxIncrement = 0;

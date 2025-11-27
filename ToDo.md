@@ -5,6 +5,8 @@
 - add functionality to modify a table if necessary - for example chaning a field type from text to int and vice versa
 - Get setup/config working on ftp wserver
 - Add stats. All eligible variables in accordian type, one opens, one closes
+- app should look at the xml files listed in the json file rather than just the ones in the folder - we may remove some from the survey
+- concerned about the yaml file having hard-code assets
 
 
 ## GistXConfig

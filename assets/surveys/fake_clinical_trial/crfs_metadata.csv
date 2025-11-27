@@ -1,0 +1,4 @@
+tablename,primarykey,displayname,isbase,linkingfield,parenttable,incrementfield,requireslink,idconfig,repeat_count_field,repeat_count_source,auto_start_repeat,repeat_enforce_count,display_order,display_fields
+enrollment,subjid,Enrollment Form,1,subjid,,,0,"{""prefix"": ""GX"", ""fields"": [{""name"": ""tabletnum"", ""length"": 2}], ""incrementLength"": 3}",,,,,10,
+followup,"subjid,vdate",Followup Survey,0,subjid,enrollment,,1,,,,,,20,
+swf,subjid,Subject Withdrawal Form,0,subjid,enrollment,,1,,,,,,30,
