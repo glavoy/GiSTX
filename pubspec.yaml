@@ -14,11 +14,14 @@ dependencies:
   # for desktop (Windows) – sqflite on FFI
   sqflite_common_ffi: ^2.3.2
   crypto: ^3.0.3
+  flutter_secure_storage: ^9.2.2
+  csv: ^6.0.0
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/surveys/
+    - assets/surveys/fake_household_survey/
+    - assets/surveys/fake_clinical_trial/
     - assets/branding/gistx.png
     - assets/database/
 

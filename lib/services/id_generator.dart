@@ -53,6 +53,7 @@ class IdGenerator {
   ///
   /// This will generate: GX57001, GX57002, etc.
   static Future<String> generateId({
+    required String surveyId,
     required String tableName,
     required String idConfigJson,
     required Map<String, dynamic> answers,
@@ -77,7 +78,8 @@ class IdGenerator {
 
         // If the padded value exceeds the configured length, take the last part of the string
         if (paddedValue.length > field.length) {
-          baseId.write(paddedValue.substring(paddedValue.length - field.length));
+          baseId
+              .write(paddedValue.substring(paddedValue.length - field.length));
         } else {
           baseId.write(paddedValue);
         }
@@ -86,6 +88,7 @@ class IdGenerator {
       // Query database to find the next increment number
       final baseIdStr = baseId.toString();
       final nextIncrement = await _getNextIncrement(
+        surveyId: surveyId,
         tableName: tableName,
         baseId: baseIdStr,
         incrementLength: config.incrementLength,
@@ -111,13 +114,14 @@ class IdGenerator {
   ///
   /// This will return 3 (for GX57003)
   static Future<int> _getNextIncrement({
+    required String surveyId,
     required String tableName,
     required String baseId,
     required int incrementLength,
   }) async {
     try {
       // Get all records from the table
-      final records = await DbService.getExistingRecords(tableName);
+      final records = await DbService.getExistingRecords(surveyId, tableName);
 
       // Find the maximum increment number for this base ID
       int maxIncrement = 0;

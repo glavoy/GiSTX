@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/db_service.dart';
 import 'survey_screen.dart';
+import '../services/survey_config_service.dart';
 
 /// Screen for selecting an existing record to view/modify
 class RecordSelectorScreen extends StatefulWidget {
@@ -38,15 +39,22 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
   Future<RecordSelectorData> _loadData() async {
     try {
       await DbService.init();
+
+      final surveyConfig = SurveyConfigService();
+      final surveyId = await surveyConfig.getActiveSurveyId();
+      if (surveyId == null) throw Exception('No active survey found');
+
       final tableName =
           widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
-      final pkFields = await DbService.getPrimaryKeyFields(tableName);
-      final records = await DbService.getExistingRecords(tableName);
+
+      final pkFields = await DbService.getPrimaryKeyFields(surveyId, tableName);
+      final records = await DbService.getExistingRecords(surveyId, tableName);
 
       // Get display fields configuration from CRFs table
-      final crfConfig = await DbService.getCrfConfig(tableName);
+      final crfConfig = await DbService.getCrfConfig(surveyId, tableName);
       final displayFieldsStr = crfConfig?['display_fields']?.toString();
-      final displayFields = displayFieldsStr?.split(',').map((s) => s.trim()).toList() ?? [];
+      final displayFields =
+          displayFieldsStr?.split(',').map((s) => s.trim()).toList() ?? [];
 
       return RecordSelectorData(
         tableName: tableName,
@@ -84,8 +92,8 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
   }) {
     // Only show display fields for non-first primary key fields
     // e.g., show name for linenum (2nd field), but not for hhid (1st field)
-    final isFirstPrimaryKey = primaryKeyFields.isNotEmpty &&
-                               fieldName == primaryKeyFields.first;
+    final isFirstPrimaryKey =
+        primaryKeyFields.isNotEmpty && fieldName == primaryKeyFields.first;
 
     if (displayFields.isEmpty || isFirstPrimaryKey) {
       return value;
@@ -389,18 +397,19 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
         _getUniqueValuesForField(filteredRecords, fieldName);
 
     // Auto-select if only one option exists and it's not already selected
-    if (availableValues.length == 1 && _selectedValues[fieldName] != availableValues.first) {
+    if (availableValues.length == 1 &&
+        _selectedValues[fieldName] != availableValues.first) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {
             _selectedValues[fieldName] = availableValues.first;
             // Clear subsequent fields to trigger their rebuild/auto-select if needed
-             final currentIndex = data.primaryKeyFields.indexOf(fieldName);
-              for (int i = currentIndex + 1;
-                  i < data.primaryKeyFields.length;
-                  i++) {
-                _selectedValues[data.primaryKeyFields[i]] = null;
-              }
+            final currentIndex = data.primaryKeyFields.indexOf(fieldName);
+            for (int i = currentIndex + 1;
+                i < data.primaryKeyFields.length;
+                i++) {
+              _selectedValues[data.primaryKeyFields[i]] = null;
+            }
           });
         }
       });

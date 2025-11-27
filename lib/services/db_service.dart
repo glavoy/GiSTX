@@ -1,19 +1,24 @@
 import 'dart:io';
-
+import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:path_provider/path_provider.dart';
+
 import 'package:path/path.dart' as p;
+import 'package:csv/csv.dart';
 import '../config/app_config.dart';
 import '../models/question.dart';
 import 'survey_loader.dart';
 
 class DbService {
-  static Database? _db;
+  // Map of surveyId -> Database
+  static final Map<String, Database> _databases = {};
 
-  /// Call once at app start
+  // Keep track of initialized surveys to avoid re-initializing
+  static final Set<String> _initializedSurveys = {};
+
+  /// Call once at app start to initialize the environment and load available surveys
   static Future<void> init() async {
     try {
       // Initialize FFI for desktop platforms
@@ -22,131 +27,292 @@ class DbService {
         databaseFactory = databaseFactoryFfi;
       }
 
-      // Determine the database path
-      String dbPath;
-      if (AppConfig.customDatabasePath != null) {
-        // Use custom path (Windows)
-        dbPath = AppConfig.customDatabasePath!;
-      } else {
-        // Use default internal path (Android/iOS)
-        final dir = await getApplicationDocumentsDirectory();
-        dbPath = p.join(dir.path, AppConfig.databaseFilename);
-      }
-
-      _log('Using database path: $dbPath');
-
-      // Check if we need to copy from assets (Mobile only usually, or if custom path missing)
-      // For Windows with custom path, we assume the file exists at that location as per user setup.
-      // For Android, we must copy it from assets if it doesn't exist in app docs.
-      if (AppConfig.customDatabasePath == null) {
-        if (!await File(dbPath).exists()) {
-          _log('Database not found at $dbPath. Copying from assets...');
-          try {
-            // Ensure parent directory exists
-            await Directory(p.dirname(dbPath)).create(recursive: true);
-
-            // Copy from assets
-            final data =
-                await rootBundle.load('assets/database/fake_survey.sqlite');
-            final bytes =
-                data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-            await File(dbPath).writeAsBytes(bytes, flush: true);
-            _log('Database copied successfully.');
-          } catch (e) {
-            _logError('Failed to copy database from assets: $e');
-            // Fallback: let openDatabase create an empty one if copying fails?
-            // Or rethrow? Rethrowing is safer as we need the schema.
-            rethrow;
-          }
-        }
-      }
-
-      // Open the database
-      _db = await openDatabase(dbPath);
-
-      // Sync database schema with XML definitions
-      await _syncDatabaseSchema();
+      _log('Initializing DbService...');
+      await _initializeSurveyDatabases();
     } catch (e) {
-      _logError('Failed to initialize database: $e');
+      _logError('Failed to initialize database service: $e');
       rethrow;
     }
   }
 
-  /// Sync the database schema with the XML survey definitions
-  static Future<void> _syncDatabaseSchema() async {
+  /// Scan assets/surveys and initialize databases for each found survey
+  static Future<void> _initializeSurveyDatabases() async {
     try {
-      _log('Starting database schema sync...');
+      // We need to find where the surveys are.
+      // On Windows, we can try to look in the local assets folder relative to the executable
+      // or rely on the known folders from SurveyConfigService if listing assets is not reliable via IO.
 
-      // Load AssetManifest to find all XML files in assets/surveys/
-      // Load AssetManifest to find all XML files in assets/surveys/
-      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      // For this implementation, we will try to list directories in 'assets/surveys'
+      // If that fails (e.g. in release mode where assets are bundled), we might need another strategy
+      // but the user requirement implies runtime creation and folder scanning.
 
-      final surveyFiles = manifest
-          .listAssets()
-          .where((String key) =>
-              key.startsWith('assets/surveys/') && key.endsWith('.xml'))
-          .toList();
+      _log('Current working directory: ${Directory.current.path}');
+      final surveysDir = Directory('assets/surveys');
+      _log('Looking for surveys in: ${surveysDir.absolute.path}');
 
-      _log('Found ${surveyFiles.length} survey files: $surveyFiles');
+      if (!await surveysDir.exists()) {
+        _log(
+            'Warning: assets/surveys directory not found at ${surveysDir.absolute.path}');
+        // Fallback: try to use the hardcoded list from SurveyConfigService or just return
+        // For now, let's assume we can access it or we use the known list.
+        await _initKnownSurveys();
+        return;
+      }
 
-      for (final assetPath in surveyFiles) {
-        final filename = p.basename(assetPath);
-        final tableName = filename.toLowerCase().replaceAll('.xml', '');
+      final List<FileSystemEntity> entities = await surveysDir.list().toList();
+      _log('Found ${entities.length} entities in surveys directory');
+      for (final entity in entities) {
+        if (entity is Directory) {
+          final surveyId = p.basename(entity.path);
+          _log('Found survey directory: $surveyId');
+          await _initDatabaseForSurvey(surveyId);
+        }
+      }
+    } catch (e) {
+      _logError('Error scanning survey directories: $e');
+      // Fallback to known surveys
+      await _initKnownSurveys();
+    }
+  }
 
-        _log('Checking schema for $tableName ($filename)...');
+  static Future<void> _initKnownSurveys() async {
+    // This is a fallback if we can't list the directory
+    // We should probably expose the list from SurveyConfigService, but for now hardcode or import
+    const knownSurveys = ['fake_household_survey', 'fake_clinical_trial'];
+    for (final surveyId in knownSurveys) {
+      await _initDatabaseForSurvey(surveyId);
+    }
+  }
 
-        // Load questions
-        final questions = await SurveyLoader.loadFromAsset(assetPath);
+  /// Initialize the database for a specific survey
+  static Future<void> _initDatabaseForSurvey(String surveyId) async {
+    if (_initializedSurveys.contains(surveyId)) return;
 
-        // Filter data questions
-        final dataQuestions =
-            questions.where((q) => q.type != QuestionType.information).toList();
-        _log('Loaded ${dataQuestions.length} data questions for $tableName');
+    try {
+      _log('Initializing database for survey: $surveyId');
 
-        if (dataQuestions.isEmpty) continue;
-
-        // Check if table exists
-        final tableExists = await _tableExists(tableName);
-
-        if (!tableExists) {
-          _log('Table $tableName does not exist. Creating...');
-          // Create table with data questions
-          final buffer = StringBuffer();
-          buffer.write('CREATE TABLE $tableName (');
-
-          final colDefs = <String>[];
-          for (final q in dataQuestions) {
-            colDefs.add('${q.fieldName} ${_getSqlType(q)}');
-          }
-
-          buffer.write(colDefs.join(', '));
-          buffer.write(')');
-
-          await _db!.execute(buffer.toString());
-          _log('Table $tableName created.');
+      // 1. Read manifest
+      final manifestPath = 'assets/surveys/$surveyId/survey_manifest.json';
+      Map<String, dynamic> manifest;
+      try {
+        // Try loading from rootBundle first (standard Flutter asset)
+        final manifestJson = await rootBundle.loadString(manifestPath);
+        manifest = json.decode(manifestJson) as Map<String, dynamic>;
+      } catch (e) {
+        // Fallback to file IO if not in bundle (e.g. dynamically added)
+        final file = File(manifestPath);
+        if (await file.exists()) {
+          final manifestJson = await file.readAsString();
+          manifest = json.decode(manifestJson) as Map<String, dynamic>;
         } else {
-          // Table exists, check columns
-          final existingColumns = await _getTableColumns(tableName);
-          _log('Existing columns in $tableName: $existingColumns');
+          _logError('Manifest not found for $surveyId at $manifestPath');
+          return;
+        }
+      }
 
-          for (final q in dataQuestions) {
-            if (!existingColumns.contains(q.fieldName.toLowerCase())) {
-              _log('Column ${q.fieldName} missing in $tableName. Adding...');
-              final sqlType = _getSqlType(q);
-              try {
-                await _db!.execute(
-                    'ALTER TABLE $tableName ADD COLUMN ${q.fieldName} $sqlType');
-                _log('Successfully added column ${q.fieldName}');
-              } catch (e) {
-                _logError('Failed to add column ${q.fieldName}: $e');
-              }
+      final dbName = manifest['databaseName'] as String?;
+      if (dbName == null) {
+        _logError('No databaseName in manifest for $surveyId');
+        return;
+      }
+
+      // 2. Determine DB path
+      // User requested: /assets/database folder
+      // We'll create this folder if it doesn't exist
+      final dbDir = Directory('assets/database');
+      if (!await dbDir.exists()) {
+        await dbDir.create(recursive: true);
+      }
+      // Use absolute path to ensure it goes exactly where we want,
+      // avoiding sqflite_common_ffi's default sandbox in .dart_tool
+      final dbPath = p.join(dbDir.absolute.path, dbName);
+      _log('Database path for $surveyId: $dbPath');
+
+      // 3. Open Database
+      final db =
+          await openDatabase(dbPath, version: 1, onCreate: (db, version) async {
+        _log('Creating new database for $surveyId');
+        // We will handle table creation in _syncDatabaseSchema, but we can do initial setup here if needed
+      });
+
+      _databases[surveyId] = db;
+      _initializedSurveys.add(surveyId);
+
+      // 4. Sync Schema (Create CRFS, Survey Tables)
+      await _syncDatabaseSchema(surveyId, db, manifest);
+    } catch (e) {
+      _logError('Failed to initialize database for $surveyId: $e');
+    }
+  }
+
+  static Future<void> _syncDatabaseSchema(
+      String surveyId, Database db, Map<String, dynamic> manifest) async {
+    try {
+      // 1. Create and Populate CRFS Table
+      await _syncCrfsTable(surveyId, db, manifest);
+
+      // 2. Create Survey Tables from XMLs
+      final xmlFiles = manifest['xmlFiles'] as List?;
+      if (xmlFiles != null) {
+        for (final xmlFile in xmlFiles) {
+          await _syncSurveyTable(surveyId, db, xmlFile.toString());
+        }
+      }
+    } catch (e) {
+      _logError('Error syncing schema for $surveyId: $e');
+    }
+  }
+
+  static Future<void> _syncCrfsTable(
+      String surveyId, Database db, Map<String, dynamic> manifest) async {
+    // Check if table exists
+    final tableExists = await _tableExists(db, 'crfs');
+
+    if (!tableExists) {
+      _log('Creating crfs table for $surveyId...');
+      // User specified schema
+      await db.execute('''
+        CREATE TABLE crfs (
+          display_order INTEGER DEFAULT 0, 
+          tablename TEXT,
+          primarykey TEXT,
+          displayname TEXT,
+          isbase INTEGER DEFAULT 0,
+          linkingfield TEXT,
+          parenttable TEXT,
+          incrementfield TEXT,
+          requireslink INTEGER DEFAULT 0,
+          idconfig TEXT,
+          repeat_count_field TEXT, 
+          repeat_count_source TEXT, 
+          auto_start_repeat INTEGER, 
+          repeat_enforce_count INTEGER,
+          display_fields TEXT
+        )
+      ''');
+    }
+
+    // Populate from CSV
+    // We always try to sync/update the metadata
+    final crfsMetadataFile = manifest['crfsMetadataFile'] as String?;
+    if (crfsMetadataFile != null) {
+      await _populateCrfsTable(surveyId, db, crfsMetadataFile);
+    }
+  }
+
+  static Future<void> _populateCrfsTable(
+      String surveyId, Database db, String csvFilename) async {
+    try {
+      final csvPath = 'assets/surveys/$surveyId/$csvFilename';
+      String csvContent;
+
+      try {
+        csvContent = await rootBundle.loadString(csvPath);
+      } catch (e) {
+        final file = File(csvPath);
+        if (await file.exists()) {
+          csvContent = await file.readAsString();
+        } else {
+          _logError('CRFS metadata file not found: $csvPath');
+          return;
+        }
+      }
+
+      final List<List<dynamic>> csvData =
+          const CsvToListConverter().convert(csvContent);
+      if (csvData.isEmpty) return;
+
+      // Headers are in the first row
+      final headers = csvData[0].map((h) => h.toString().trim()).toList();
+
+      // Clear existing data to ensure fresh sync
+      await db.delete('crfs');
+
+      for (int i = 1; i < csvData.length; i++) {
+        final row = csvData[i];
+        if (row.isEmpty) continue;
+
+        final Map<String, dynamic> rowData = {};
+        for (int j = 0; j < headers.length && j < row.length; j++) {
+          final header = headers[j];
+          final value = row[j];
+
+          // Handle boolean/integer conversion if needed based on schema defaults
+          // The schema uses INTEGER for flags like isbase, requireslink
+          // We assume the CSV contains appropriate values (0/1) or we might need conversion
+          rowData[header] = value;
+        }
+
+        await db.insert('crfs', rowData);
+      }
+      _log(
+          'Populated crfs table for $surveyId with ${csvData.length - 1} rows');
+    } catch (e) {
+      _logError('Error populating crfs table: $e');
+    }
+  }
+
+  static Future<void> _syncSurveyTable(
+      String surveyId, Database db, String xmlFilename) async {
+    final assetPath = 'assets/surveys/$surveyId/$xmlFilename';
+    final tableName =
+        p.basename(xmlFilename).toLowerCase().replaceAll('.xml', '');
+
+    try {
+      final questions = await SurveyLoader.loadFromAsset(assetPath);
+      final dataQuestions =
+          questions.where((q) => q.type != QuestionType.information).toList();
+
+      if (dataQuestions.isEmpty) return;
+
+      final tableExists = await _tableExists(db, tableName);
+
+      if (!tableExists) {
+        _log('Creating table $tableName for $surveyId...');
+        final buffer = StringBuffer();
+        buffer.write('CREATE TABLE $tableName (');
+
+        // Add uniqueid as a standard field if not present in questions?
+        // The previous implementation didn't explicitly add it, implying it might be in the XML or handled otherwise.
+        // However, `updateInterview` uses `uniqueid`. Let's assume it's part of the schema or needs to be added.
+        // Checking previous code: it didn't add `uniqueid` explicitly in `onCreate`.
+        // But `updateInterview` queries `where: 'uniqueid = ?'`.
+        // This implies `uniqueid` MUST be a column.
+        // I will add it as a standard column if it's not in the questions.
+
+        final colDefs = <String>[];
+        bool hasUniqueId = false;
+
+        for (final q in dataQuestions) {
+          colDefs.add('${q.fieldName} ${_getSqlType(q)}');
+          if (q.fieldName.toLowerCase() == 'uniqueid') hasUniqueId = true;
+        }
+
+        if (!hasUniqueId) {
+          colDefs.add('uniqueid TEXT PRIMARY KEY');
+        }
+
+        buffer.write(colDefs.join(', '));
+        buffer.write(')');
+
+        await db.execute(buffer.toString());
+      } else {
+        // Alter table logic
+        final existingColumns = await _getTableColumns(db, tableName);
+        for (final q in dataQuestions) {
+          if (!existingColumns.contains(q.fieldName.toLowerCase())) {
+            try {
+              await db.execute(
+                  'ALTER TABLE $tableName ADD COLUMN ${q.fieldName} ${_getSqlType(q)}');
+              _log('Added column ${q.fieldName} to $tableName');
+            } catch (e) {
+              _logError('Failed to add column ${q.fieldName}: $e');
             }
           }
         }
       }
-      _log('Database schema sync completed.');
     } catch (e) {
-      _logError('Error syncing schema: $e');
+      _logError('Error syncing table $tableName: $e');
     }
   }
 
@@ -161,253 +327,124 @@ class DbService {
     }
   }
 
-  /// Get the current database path
-  static String? get databasePath => _db?.path;
+  // --- Public API methods ---
 
-  /// Save one completed interview's answers to the survey-specific table.
-  /// The table name is derived from the survey XML filename (without .xml extension).
-  ///
-  /// - `surveyFilename`: the XML filename (e.g., 'survey.xml')
-  /// - `answers`: in-memory AnswerMap (fieldname -> value)
+  static Future<Database> _getDbOrThrow(String surveyId) async {
+    if (!_databases.containsKey(surveyId)) {
+      // Try to init if missing
+      await _initDatabaseForSurvey(surveyId);
+    }
+    final db = _databases[surveyId];
+    if (db == null) {
+      throw DatabaseException('Database not initialized for survey: $surveyId');
+    }
+    return db;
+  }
+
   static Future<void> saveInterview({
+    required String surveyId,
     required String surveyFilename,
     required AnswerMap answers,
   }) async {
-    final db = _db!;
-
-    // Derive table name from filename: remove .xml extension
+    final db = await _getDbOrThrow(surveyId);
     final tableName = surveyFilename.toLowerCase().replaceAll('.xml', '');
 
     try {
-      // Check if table exists first
-      final tableExists = await _tableExists(tableName);
-      if (!tableExists) {
-        final errorMsg =
-            'Table "$tableName" does not exist in database.\n\nExpected table name: $tableName\nDatabase path: ${databasePath}\n\nPlease create this table using your external application before conducting surveys.';
-        _logError(errorMsg);
-        throw DatabaseException(errorMsg);
+      if (!await _tableExists(db, tableName)) {
+        throw DatabaseException('Table "$tableName" does not exist.');
       }
 
-      // Build the column:value map from answers
-      // Convert special types to database-friendly formats
       final Map<String, dynamic> rowData = {};
-
       for (final entry in answers.entries) {
-        final key = entry.key;
         final val = entry.value;
         if (val == null) continue;
 
-        // Store the value based on its runtime type
         if (val is List) {
-          // Checkbox values - store as comma-separated
-          rowData[key] = val.map((e) => e.toString()).join(',');
+          rowData[entry.key] = val.map((e) => e.toString()).join(',');
         } else if (val is DateTime) {
-          // DateTime values - store as ISO8601 string
-          rowData[key] = val.toIso8601String();
+          rowData[entry.key] = val.toIso8601String();
         } else {
-          // Everything else (String, int, etc.) - store as-is
-          rowData[key] = val;
+          rowData[entry.key] = val;
         }
       }
 
-      // Insert or replace the row
-      await db.insert(
-        tableName,
-        rowData,
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      await db.insert(tableName, rowData,
+          conflictAlgorithm: ConflictAlgorithm.replace);
     } catch (e) {
-      final errorMsg =
-          'Failed to save interview to table "$tableName": $e\n\nDatabase: ${databasePath}';
-      _logError(errorMsg);
-      throw DatabaseException(errorMsg);
+      _logError('Failed to save interview: $e');
+      throw DatabaseException('Failed to save interview: $e');
     }
   }
 
-  /// Check if a table exists in the database
-  static Future<bool> _tableExists(String tableName) async {
-    if (_db == null) return false;
-
-    try {
-      final result = await _db!.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-        [tableName],
-      );
-      return result.isNotEmpty;
-    } catch (e) {
-      _logError('Error checking if table exists: $e');
-      return false;
-    }
-  }
-
-  /// Get the primary key field(s) for a survey from the CRFs table
-  /// Returns a list of field names (empty list if not found or error)
-  static Future<List<String>> getPrimaryKeyFields(String tableName) async {
-    if (_db == null) {
-      _logError('Database not initialized');
-      return [];
-    }
-
-    try {
-      final result = await _db!.query(
-        'crfs',
-        columns: ['primarykey'],
-        where: 'tablename = ?',
-        whereArgs: [tableName],
-      );
-
-      if (result.isEmpty) {
-        _logError('No primary key definition found for table: $tableName');
-        return [];
-      }
-
-      // Primary key can be comma-separated for composite keys (e.g., "subjid,date")
-      final pkString = result.first['primarykey'] as String;
-      return pkString.split(',').map((s) => s.trim()).toList();
-    } catch (e) {
-      _logError('Error fetching primary key for $tableName: $e');
-      return [];
-    }
-  }
-
-  /// Get all existing records from a survey table
-  /// Returns a list of maps, each containing the full record data
   static Future<List<Map<String, dynamic>>> getExistingRecords(
-      String tableName) async {
-    if (_db == null) {
-      _logError('Database not initialized');
-      return [];
-    }
-
+      String surveyId, String tableName) async {
     try {
-      final tableExists = await _tableExists(tableName);
-      if (!tableExists) {
-        _logError('Table $tableName does not exist');
-        return [];
-      }
-
-      final results = await _db!.query(tableName);
-      _log('Found ${results.length} records in $tableName');
-      return results;
+      final db = await _getDbOrThrow(surveyId);
+      if (!await _tableExists(db, tableName)) return [];
+      return await db.query(tableName);
     } catch (e) {
-      _logError('Error fetching records from $tableName: $e');
+      _logError('Error fetching records: $e');
       return [];
     }
   }
 
-  /// Get a specific record by uniqueid
-  /// Returns the record data or null if not found
   static Future<Map<String, dynamic>?> getRecordByUniqueId(
-      String tableName, String uniqueId) async {
-    if (_db == null) {
-      _logError('Database not initialized');
-      return null;
-    }
-
+      String surveyId, String tableName, String uniqueId) async {
     try {
-      final results = await _db!.query(
-        tableName,
-        where: 'uniqueid = ?',
-        whereArgs: [uniqueId],
-      );
-
-      if (results.isEmpty) {
-        _log('No record found with uniqueid: $uniqueId');
-        return null;
-      }
-
-      return results.first;
+      final db = await _getDbOrThrow(surveyId);
+      final results = await db
+          .query(tableName, where: 'uniqueid = ?', whereArgs: [uniqueId]);
+      return results.isNotEmpty ? results.first : null;
     } catch (e) {
-      _logError('Error fetching record by uniqueid: $e');
       return null;
     }
   }
 
-  /// Get the next linenum for a specific primary key value
-  /// Returns 1 if no records exist, otherwise returns max(linenum) + 1
-  /// primaryKeyField: the name of the primary key field (e.g., 'hhid')
-  /// primaryKeyValue: the value to filter by (e.g., 'SP01001')
   static Future<int> getNextLineNum({
+    required String surveyId,
     required String tableName,
     required String primaryKeyField,
     required String primaryKeyValue,
   }) async {
-    if (_db == null) {
-      _logError('Database not initialized');
-      return 1;
-    }
-
     try {
-      final tableExists = await _tableExists(tableName);
-      if (!tableExists) {
-        _logError('Table $tableName does not exist');
-        return 1;
-      }
+      final db = await _getDbOrThrow(surveyId);
+      if (!await _tableExists(db, tableName)) return 1;
 
-      // Query for the maximum linenum where primary key matches
-      final results = await _db!.rawQuery(
+      final results = await db.rawQuery(
         'SELECT MAX(linenum) as maxLineNum FROM $tableName WHERE $primaryKeyField = ?',
         [primaryKeyValue],
       );
 
-      if (results.isEmpty || results.first['maxLineNum'] == null) {
-        _log('No existing records for $primaryKeyField=$primaryKeyValue, returning linenum=1');
-        return 1;
-      }
-
-      final maxLineNum = results.first['maxLineNum'] as int;
-      final nextLineNum = maxLineNum + 1;
-      _log('Found max linenum=$maxLineNum for $primaryKeyField=$primaryKeyValue, returning $nextLineNum');
-      return nextLineNum;
+      if (results.isEmpty || results.first['maxLineNum'] == null) return 1;
+      return (results.first['maxLineNum'] as int) + 1;
     } catch (e) {
-      _logError('Error getting next linenum for $tableName: $e');
       return 1;
     }
   }
 
-  /// Update an existing interview record
-  /// Uses uniqueid to identify the record to update
-  /// Also records all changes in the formchanges table
   static Future<void> updateInterview({
+    required String surveyId,
     required String surveyFilename,
     required AnswerMap answers,
     required String uniqueId,
     required Map<String, dynamic>? originalAnswers,
   }) async {
-    final db = _db!;
+    final db = await _getDbOrThrow(surveyId);
     final tableName = surveyFilename.toLowerCase().replaceAll('.xml', '');
 
     try {
-      final tableExists = await _tableExists(tableName);
-      if (!tableExists) {
-        throw DatabaseException(
-            'Table "$tableName" does not exist in database.');
-      }
-
-      // Get existing columns in the table
-      final existingColumns = await _getTableColumns(tableName);
-      _log('Table $tableName has columns: ${existingColumns.join(", ")}');
-
-      // Build the column:value map from answers
+      final existingColumns = await _getTableColumns(db, tableName);
       final Map<String, dynamic> rowData = {};
 
       for (final entry in answers.entries) {
         final key = entry.key;
         final val = entry.value;
 
-        // Only include columns that exist in the table
-        if (!existingColumns.contains(key.toLowerCase())) {
-          _log('Skipping field "$key" - not found in table');
-          continue;
-        }
+        if (!existingColumns.contains(key.toLowerCase())) continue;
 
-        // Handle null values (for clearing skipped questions)
         if (val == null) {
           rowData[key] = null;
-          continue;
-        }
-
-        if (val is List) {
+        } else if (val is List) {
           rowData[key] = val.map((e) => e.toString()).join(',');
         } else if (val is DateTime) {
           rowData[key] = val.toIso8601String();
@@ -416,15 +453,11 @@ class DbService {
         }
       }
 
-      if (rowData.isEmpty) {
-        throw DatabaseException('No valid fields to update');
-      }
+      if (rowData.isEmpty) throw DatabaseException('No valid fields to update');
 
-      _log('Updating record with fields: ${rowData.keys.join(", ")}');
-
-      // Record changes in formchanges table
       if (originalAnswers != null) {
         await _recordChanges(
+          db: db,
           tableName: tableName,
           uniqueId: uniqueId,
           originalAnswers: originalAnswers,
@@ -433,66 +466,33 @@ class DbService {
         );
       }
 
-      // Update the record by uniqueid
-      final updateCount = await db.update(
-        tableName,
-        rowData,
-        where: 'uniqueid = ?',
-        whereArgs: [uniqueId],
-      );
-
-      if (updateCount == 0) {
-        throw DatabaseException(
-            'Failed to update record: no record found with uniqueid=$uniqueId');
-      }
-
-      _log(
-          'Updated $updateCount record(s) in $tableName with uniqueid=$uniqueId');
+      await db.update(tableName, rowData,
+          where: 'uniqueid = ?', whereArgs: [uniqueId]);
     } catch (e) {
-      final errorMsg = 'Failed to update interview in "$tableName": $e';
-      _logError(errorMsg);
-      throw DatabaseException(errorMsg);
+      throw DatabaseException('Failed to update interview: $e');
     }
   }
 
-  /// Record field changes in the formchanges table
-  /// Compares original and new answers and inserts one record per changed field
   static Future<void> _recordChanges({
+    required Database db,
     required String tableName,
     required String uniqueId,
     required Map<String, dynamic> originalAnswers,
     required AnswerMap newAnswers,
     required List<String> existingColumns,
   }) async {
-    final db = _db!;
-    int changeCount = 0;
-
     try {
-      // Check if formchanges table exists
-      final formChangesExists = await _tableExists('formchanges');
-      if (!formChangesExists) {
-        _logError(
-            'formchanges table does not exist - skipping change tracking');
-        return;
-      }
+      if (!await _tableExists(db, 'formchanges')) return;
 
       for (final entry in newAnswers.entries) {
         final fieldName = entry.key;
-        final newValue = entry.value;
+        if (!existingColumns.contains(fieldName.toLowerCase())) continue;
 
-        // Skip fields that don't exist in the table
-        if (!existingColumns.contains(fieldName.toLowerCase())) {
-          continue;
-        }
-
-        // Get old value
         final oldValue = originalAnswers[fieldName];
-
-        // Convert values to string for comparison and storage
+        final newValue = entry.value;
         final oldValueStr = _valueToString(oldValue);
         final newValueStr = _valueToString(newValue);
 
-        // Only record if values are different
         if (oldValueStr != newValueStr) {
           await db.insert('formchanges', {
             'tablename': tableName,
@@ -502,116 +502,78 @@ class DbService {
             'newvalue': newValueStr,
             'changed_at': DateTime.now().toIso8601String(),
           });
-          changeCount++;
-          _log(
-              'Recorded change: $fieldName from "$oldValueStr" to "$newValueStr"');
         }
       }
-
-      _log('Recorded $changeCount field changes in formchanges table');
     } catch (e) {
       _logError('Error recording changes: $e');
-      // Don't throw - we don't want change tracking failure to prevent the update
     }
   }
 
-  /// Convert a value to string for comparison and storage
   static String? _valueToString(dynamic value) {
     if (value == null) return null;
-    if (value is List) {
-      return value.map((e) => e.toString()).join(',');
-    } else if (value is DateTime) {
-      return value.toIso8601String();
-    } else {
-      return value.toString();
-    }
+    if (value is List) return value.map((e) => e.toString()).join(',');
+    if (value is DateTime) return value.toIso8601String();
+    return value.toString();
   }
 
-  /// Check if a value is unique in the given table and column
-  static Future<bool> isValueUnique(
-      String tableName, String columnName, String value) async {
-    if (_db == null) await init();
+  static Future<bool> isValueUnique(String surveyId, String tableName,
+      String columnName, String value) async {
     try {
-      final count = Sqflite.firstIntValue(await _db!.rawQuery(
+      final db = await _getDbOrThrow(surveyId);
+      final count = Sqflite.firstIntValue(await db.rawQuery(
         'SELECT COUNT(*) FROM $tableName WHERE $columnName = ?',
         [value],
       ));
       return (count ?? 0) == 0;
     } catch (e) {
-      _logError('Error checking uniqueness: $e');
       return true;
     }
   }
 
-  /// Get all column names for a table
-  static Future<List<String>> _getTableColumns(String tableName) async {
-    if (_db == null) return [];
-
+  static Future<List<String>> getPrimaryKeyFields(
+      String surveyId, String tableName) async {
     try {
-      final result = await _db!.rawQuery('PRAGMA table_info($tableName)');
-      final columns =
-          result.map((row) => (row['name'] as String).toLowerCase()).toList();
-      return columns;
+      final db = await _getDbOrThrow(surveyId);
+      final result = await db.query('crfs',
+          columns: ['primarykey'],
+          where: 'tablename = ?',
+          whereArgs: [tableName]);
+      if (result.isEmpty) return [];
+      final pkString = result.first['primarykey'] as String;
+      return pkString.split(',').map((s) => s.trim()).toList();
     } catch (e) {
-      _logError('Error getting table columns: $e');
       return [];
     }
   }
 
-  /// Get CRF configuration for a specific table
-  /// Returns the CRF record with all metadata or null if not found
-  static Future<Map<String, dynamic>?> getCrfConfig(String tableName) async {
-    if (_db == null) {
-      _logError('Database not initialized');
-      return null;
-    }
-
+  static Future<Map<String, dynamic>?> getCrfConfig(
+      String surveyId, String tableName) async {
     try {
-      final results = await _db!.query(
-        'crfs',
-        where: 'tablename = ?',
-        whereArgs: [tableName],
-      );
-
-      if (results.isEmpty) {
-        return null;
-      }
-
-      return results.first;
+      final db = await _getDbOrThrow(surveyId);
+      final results = await db
+          .query('crfs', where: 'tablename = ?', whereArgs: [tableName]);
+      return results.isNotEmpty ? results.first : null;
     } catch (e) {
-      _logError('Error fetching CRF config for $tableName: $e');
       return null;
     }
   }
 
-  /// Count records in a table matching a where clause
-  /// Returns the count of matching records
   static Future<int> getRecordCount({
+    required String surveyId,
     required String tableName,
     String? where,
     List<dynamic>? whereArgs,
   }) async {
-    if (_db == null) {
-      _logError('Database not initialized');
-      return 0;
-    }
-
     try {
-      final tableExists = await _tableExists(tableName);
-      if (!tableExists) {
-        _logError('Table $tableName does not exist');
-        return 0;
-      }
+      final db = await _getDbOrThrow(surveyId);
+      if (!await _tableExists(db, tableName)) return 0;
 
-      final results = await _db!.rawQuery(
+      final results = await db.rawQuery(
         'SELECT COUNT(*) as count FROM $tableName${where != null ? ' WHERE $where' : ''}',
         whereArgs,
       );
 
-      if (results.isEmpty) {
-        return 0;
-      }
-
+      if (results.isEmpty) return 0;
       return (results.first['count'] as int?) ?? 0;
     } catch (e) {
       _logError('Error counting records in $tableName: $e');
@@ -619,41 +581,56 @@ class DbService {
     }
   }
 
-  /// Update a specific field in a record
-  /// Used for auto-syncing counts
   static Future<void> updateField({
+    required String surveyId,
     required String tableName,
     required String field,
     required dynamic value,
     required String where,
     required List<dynamic> whereArgs,
   }) async {
-    if (_db == null) {
-      _logError('Database not initialized');
-      return;
-    }
-
     try {
-      final tableExists = await _tableExists(tableName);
-      if (!tableExists) {
-        _logError('Table $tableName does not exist');
-        return;
-      }
+      final db = await _getDbOrThrow(surveyId);
+      if (!await _tableExists(db, tableName)) return;
 
-      await _db!.update(
+      await db.update(
         tableName,
         {field: value},
         where: where,
         whereArgs: whereArgs,
       );
-
       _log('Updated $tableName.$field to $value where $where');
     } catch (e) {
       _logError('Error updating field $field in $tableName: $e');
     }
   }
 
-  // Logging helpers
+  // --- Helpers ---
+
+  static Future<bool> _tableExists(Database db, String tableName) async {
+    try {
+      final result = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        [tableName],
+      );
+      return result.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<List<String>> _getTableColumns(
+      Database db, String tableName) async {
+    try {
+      final result = await db.rawQuery('PRAGMA table_info($tableName)');
+      return result
+          .map((row) => (row['name'] as String).toLowerCase())
+          .toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
   static void _log(String message) {
     if (AppConfig.enableDebugLogging) {
       debugPrint('[DbService] $message');
@@ -665,12 +642,9 @@ class DbService {
   }
 }
 
-/// Custom exception for database errors
 class DatabaseException implements Exception {
   final String message;
-
   DatabaseException(this.message);
-
   @override
   String toString() => message;
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../services/db_service.dart';
+import '../services/survey_config_service.dart';
 import 'survey_screen.dart';
 import 'record_selector_screen.dart';
 import 'parent_id_selector_screen.dart';
@@ -64,22 +64,47 @@ class _QuestionnaireSelectorScreenState
       // 1. Initialize database
       await DbService.init();
 
-      // 2. Load the asset manifest to find all XML files in surveys directory
-      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      // 2. Get the active survey configuration
+      final surveyConfig = SurveyConfigService();
+      final surveyId = await surveyConfig.getActiveSurveyId();
 
-      // 3. Get all XML filenames from assets
-      final Set<String> availableXmlFiles = {};
-      for (final assetPath in manifest.listAssets()) {
-        if (assetPath.startsWith('assets/surveys/') &&
-            assetPath.endsWith('.xml')) {
-          // Extract just the filename (e.g., "baseline.xml" from "assets/surveys/baseline.xml")
-          final filename = assetPath.substring('assets/surveys/'.length);
-          availableXmlFiles.add(filename);
-        }
+      if (surveyId == null) {
+        setState(() {
+          _errorMessage =
+              'No survey selected. Please configure settings first.';
+          _isLoading = false;
+        });
+        return;
       }
 
+      debugPrint('[QuestionnaireSelector] Active survey ID: $surveyId');
+
+      // 3. Get the survey manifest to find available XML files
+      final manifest = await surveyConfig.getActiveSurveyManifest();
+      if (manifest == null) {
+        setState(() {
+          _errorMessage = 'Could not load survey manifest for: $surveyId';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final xmlFiles = manifest['xmlFiles'] as List?;
+      if (xmlFiles == null || xmlFiles.isEmpty) {
+        setState(() {
+          _errorMessage = 'No XML files defined in survey manifest';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      debugPrint('[QuestionnaireSelector] Available XML files: $xmlFiles');
+
+      // Convert to a set of filenames for quick lookup
+      final Set<String> availableXmlFiles = xmlFiles.cast<String>().toSet();
+
       // 4. Get questionnaires from the crfs table in the order they appear
-      final crfsRecords = await DbService.getExistingRecords('crfs');
+      final crfsRecords = await DbService.getExistingRecords(surveyId, 'crfs');
       final List<QuestionnaireInfo> questionnaires = [];
 
       for (final record in crfsRecords) {
@@ -90,7 +115,7 @@ class _QuestionnaireSelectorScreenState
           // Construct the expected filename from the table name
           final filename = '$tableName.xml';
 
-          // Only add if the XML file actually exists in assets
+          // Only add if the XML file actually exists in the survey manifest
           if (availableXmlFiles.contains(filename)) {
             // Parse metadata from crfs record
             final requiresLink = (record['requireslink'] as int?) == 1;
@@ -99,6 +124,9 @@ class _QuestionnaireSelectorScreenState
             final incrementField = record['incrementfield']?.toString();
             final isBase = (record['isbase'] as int?) == 1;
             final idConfig = record['idconfig']?.toString();
+
+            debugPrint(
+                '[QuestionnaireSelector] Adding questionnaire: $displayName ($filename)');
 
             questionnaires.add(QuestionnaireInfo(
               filename: filename,
@@ -119,16 +147,20 @@ class _QuestionnaireSelectorScreenState
       // 5. If no questionnaires found, show error
       if (_availableQuestionnaires.isEmpty) {
         setState(() {
-          _errorMessage = 'No questionnaire files found in assets/surveys/';
+          _errorMessage = 'No questionnaires found for survey: $surveyId';
           _isLoading = false;
         });
         return;
       }
 
+      debugPrint(
+          '[QuestionnaireSelector] Loaded ${questionnaires.length} questionnaires');
+
       setState(() {
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('[QuestionnaireSelector] Error: $e');
       setState(() {
         _errorMessage = 'Error loading questionnaires: $e';
         _isLoading = false;
