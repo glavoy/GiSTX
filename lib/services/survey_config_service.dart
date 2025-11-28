@@ -3,10 +3,16 @@
 ///
 /// Reads survey manifests and provides helper methods for accessing
 /// survey-specific resources like XML files and metadata.
+///
+/// Updated to support dynamic loading from ApplicationDocumentsDirectory
+/// and auto-extraction of bundled zip files.
 
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:archive/archive.dart';
+import 'package:path/path.dart' as p;
 import 'settings_service.dart';
 
 class SurveyConfigService {
@@ -19,6 +25,150 @@ class SurveyConfigService {
   // Cache for loaded survey manifests
   final Map<String, Map<String, dynamic>> _manifestCache = {};
 
+  /// Initialize surveys by extracting zips from local storage
+  Future<void> initializeSurveys() async {
+    try {
+      final baseDir = await _getBaseDir();
+      final zipsDir = Directory(p.join(baseDir.path, 'GiSTX', 'zips'));
+      final surveysDir = Directory(p.join(baseDir.path, 'GiSTX', 'surveys'));
+
+      if (!await zipsDir.exists()) {
+        await zipsDir.create(recursive: true);
+      }
+      if (!await surveysDir.exists()) {
+        await surveysDir.create(recursive: true);
+      }
+
+      // Scan for zip files in the zips directory
+      final List<FileSystemEntity> entities = await zipsDir.list().toList();
+      final zipFiles = entities.where((e) => e.path.endsWith('.zip')).toList();
+
+      debugPrint(
+          '[SurveyConfig] Found ${zipFiles.length} zips in ${zipsDir.path}');
+
+      for (final entity in zipFiles) {
+        if (entity is! File) continue;
+
+        final zipPath = entity.path;
+        final zipName = p.basename(zipPath);
+        final surveyFolderName = zipName.replaceAll('.zip', '');
+        final targetDir = Directory(p.join(surveysDir.path, surveyFolderName));
+
+        // Only extract if target directory doesn't exist
+        if (!await targetDir.exists()) {
+          try {
+            debugPrint(
+                '[SurveyConfig] Extracting $zipName to ${targetDir.path}');
+            final zipData = await entity.readAsBytes();
+            final archive = ZipDecoder().decodeBytes(zipData);
+
+            for (final file in archive) {
+              final filename = file.name;
+              if (file.isFile) {
+                if (filename.contains('__MACOSX') || filename.startsWith('.'))
+                  continue;
+
+                final data = file.content as List<int>;
+                final outFile = File(p.join(targetDir.path, filename));
+                await outFile.create(recursive: true);
+                await outFile.writeAsBytes(data);
+              } else {
+                if (!filename.contains('__MACOSX') &&
+                    !filename.startsWith('.')) {
+                  await Directory(p.join(targetDir.path, filename))
+                      .create(recursive: true);
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint('[SurveyConfig] Failed to extract $zipName: $e');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[SurveyConfig] Error initializing surveys: $e');
+    }
+  }
+
+  /// Delete a survey (extracted folder and source zip)
+  Future<void> deleteSurvey(String surveyName) async {
+    try {
+      final surveysDir = await getSurveysDirectory();
+      final baseDir = await _getBaseDir();
+      final zipsDir = Directory(p.join(baseDir.path, 'GiSTX', 'zips'));
+
+      // Find the survey folder by name
+      final entities = await surveysDir.list().toList();
+      Directory? surveyFolder;
+
+      for (final entity in entities) {
+        if (entity is Directory) {
+          final manifestPath = p.join(entity.path, 'survey_manifest.json');
+          final file = File(manifestPath);
+          if (await file.exists()) {
+            final manifest = await _loadManifestFromFile(file);
+            if (manifest['surveyName'] == surveyName) {
+              surveyFolder = entity;
+              break;
+            }
+          }
+        }
+      }
+
+      if (surveyFolder != null) {
+        // 1. Delete extracted folder
+        debugPrint(
+            '[SurveyConfig] Deleting survey folder: ${surveyFolder.path}');
+        await surveyFolder.delete(recursive: true);
+
+        // 2. Delete source zip if it exists
+        // We assume zip name matches folder name (which matches surveyId usually, or at least the folder name)
+        // The folder name comes from the zip name during extraction.
+        final folderName = p.basename(surveyFolder.path);
+        final zipPath = p.join(zipsDir.path, '$folderName.zip');
+        final zipFile = File(zipPath);
+
+        if (await zipFile.exists()) {
+          debugPrint('[SurveyConfig] Deleting source zip: $zipPath');
+          await zipFile.delete();
+        }
+
+        // Clear cache
+        _manifestCache.clear();
+
+        // If this was the active survey, clear it from settings
+        final activeSurvey = await _settingsService.activeSurvey;
+        if (activeSurvey == surveyName) {
+          await _settingsService.setActiveSurvey('');
+        }
+      }
+    } catch (e) {
+      debugPrint('[SurveyConfig] Error deleting survey: $e');
+      rethrow;
+    }
+  }
+
+  Future<Directory> _getBaseDir() async {
+    if (Platform.isAndroid) {
+      return await getExternalStorageDirectory() ??
+          await getApplicationDocumentsDirectory();
+    } else {
+      return await getApplicationDocumentsDirectory();
+    }
+  }
+
+  /// Get the local directory where surveys are stored
+  Future<Directory> getSurveysDirectory() async {
+    Directory baseDir;
+    if (Platform.isAndroid) {
+      baseDir = await getExternalStorageDirectory() ??
+          await getApplicationDocumentsDirectory();
+    } else {
+      baseDir = await getApplicationDocumentsDirectory();
+    }
+    return Directory(p.join(baseDir.path, 'GiSTX', 'surveys'));
+  }
+
   /// Get the survey ID from the survey name stored in settings
   /// Returns null if no survey is selected or if survey not found
   Future<String?> getActiveSurveyId() async {
@@ -30,73 +180,133 @@ class SurveyConfigService {
       return null;
     }
 
-    // List of known survey folders to check
-    const surveyFolders = [
-      'fake_household_survey',
-      'fake_clinical_trial',
-    ];
+    final surveysDir = await getSurveysDirectory();
+    if (!await surveysDir.exists()) {
+      debugPrint('[SurveyConfig] Surveys directory does not exist');
+      return null;
+    }
 
-    debugPrint('[SurveyConfig] Checking ${surveyFolders.length} survey folders...');
+    final entities = await surveysDir.list().toList();
 
     // Check each survey folder for a matching survey name
-    for (final folder in surveyFolders) {
-      try {
-        final manifestPath = 'assets/surveys/$folder/survey_manifest.json';
-        debugPrint('[SurveyConfig] Loading manifest from: $manifestPath');
-        final manifest = await _loadManifest(manifestPath);
-        final manifestSurveyName = manifest['surveyName'] as String?;
-        debugPrint('[SurveyConfig] Manifest survey name: $manifestSurveyName');
+    for (final entity in entities) {
+      if (entity is Directory) {
+        try {
+          final manifestPath = p.join(entity.path, 'survey_manifest.json');
+          final manifestFile = File(manifestPath);
 
-        if (manifestSurveyName == surveyName) {
-          final surveyId = manifest['surveyId'] as String?;
-          debugPrint('[SurveyConfig] ✓ Match found! Survey ID: $surveyId');
-          return surveyId;
+          if (await manifestFile.exists()) {
+            final manifest = await _loadManifestFromFile(manifestFile);
+            final manifestSurveyName = manifest['surveyName'] as String?;
+
+            if (manifestSurveyName == surveyName) {
+              final surveyId = manifest['surveyId'] as String?;
+              debugPrint('[SurveyConfig] ✓ Match found! Survey ID: $surveyId');
+              return surveyId;
+            }
+          }
+        } catch (e) {
+          debugPrint(
+              '[SurveyConfig] Failed to load manifest from ${entity.path}: $e');
+          continue;
         }
-      } catch (e) {
-        debugPrint('[SurveyConfig] Failed to load manifest from $folder: $e');
-        // Skip folders that don't have a valid manifest
-        continue;
       }
     }
 
-    debugPrint('[SurveyConfig] ✗ No matching survey found for name: $surveyName');
+    debugPrint(
+        '[SurveyConfig] ✗ No matching survey found for name: $surveyName');
     return null;
   }
 
-  /// Load a survey manifest from the given path
-  Future<Map<String, dynamic>> _loadManifest(String manifestPath) async {
-    if (_manifestCache.containsKey(manifestPath)) {
-      return _manifestCache[manifestPath]!;
+  /// Load a survey manifest from a file
+  Future<Map<String, dynamic>> _loadManifestFromFile(File file) async {
+    final path = file.path;
+    if (_manifestCache.containsKey(path)) {
+      return _manifestCache[path]!;
     }
 
-    final manifestJson = await rootBundle.loadString(manifestPath);
+    final manifestJson = await file.readAsString();
     final manifest = json.decode(manifestJson) as Map<String, dynamic>;
-    _manifestCache[manifestPath] = manifest;
+    _manifestCache[path] = manifest;
     return manifest;
   }
 
-  /// Get the full asset path for a questionnaire XML file
-  /// Returns the path like: 'assets/surveys/fake_household_survey/household.xml'
-  /// Returns null if no survey is active
+  /// Get the full local path for a questionnaire XML file
   Future<String?> getQuestionnaireAssetPath(String filename) async {
     final surveyId = await getActiveSurveyId();
     if (surveyId == null) return null;
 
-    return 'assets/surveys/$surveyId/$filename';
+    final surveysDir = await getSurveysDirectory();
+    // We assume the folder name matches the surveyId (or we need to find it again)
+    // For simplicity, let's assume folder name == surveyId which is standard
+    // If not, we'd need to store the folder path in getActiveSurveyId
+
+    // Re-scanning to find the folder that contains this surveyId
+    // Optimization: Cache surveyId -> folderPath mapping
+
+    final entities = await surveysDir.list().toList();
+    for (final entity in entities) {
+      if (entity is Directory) {
+        final manifestPath = p.join(entity.path, 'survey_manifest.json');
+        if (await File(manifestPath).exists()) {
+          final manifest = await _loadManifestFromFile(File(manifestPath));
+          if (manifest['surveyId'] == surveyId) {
+            return p.join(entity.path, filename);
+          }
+        }
+      }
+    }
+    return null;
   }
 
   /// Get the active survey's manifest
-  /// Returns null if no survey is selected
   Future<Map<String, dynamic>?> getActiveSurveyManifest() async {
     final surveyId = await getActiveSurveyId();
     if (surveyId == null) return null;
 
-    try {
-      final manifestPath = 'assets/surveys/$surveyId/survey_manifest.json';
-      return await _loadManifest(manifestPath);
-    } catch (e) {
-      return null;
+    final surveysDir = await getSurveysDirectory();
+    final entities = await surveysDir.list().toList();
+    for (final entity in entities) {
+      if (entity is Directory) {
+        final manifestPath = p.join(entity.path, 'survey_manifest.json');
+        final file = File(manifestPath);
+        if (await file.exists()) {
+          final manifest = await _loadManifestFromFile(file);
+          if (manifest['surveyId'] == surveyId) {
+            return manifest;
+          }
+        }
+      }
     }
+    return null;
+  }
+
+  /// Get list of all available surveys (names)
+  Future<List<String>> getAvailableSurveys() async {
+    final List<String> availableSurveys = [];
+    final surveysDir = await getSurveysDirectory();
+
+    if (!await surveysDir.exists()) return [];
+
+    final entities = await surveysDir.list().toList();
+    for (final entity in entities) {
+      if (entity is Directory) {
+        try {
+          final manifestPath = p.join(entity.path, 'survey_manifest.json');
+          final file = File(manifestPath);
+          if (await file.exists()) {
+            final manifest = await _loadManifestFromFile(file);
+            final name = manifest['surveyName'] as String?;
+            if (name != null) {
+              availableSurveys.add(name);
+            }
+          }
+        } catch (e) {
+          // ignore invalid folders
+        }
+      }
+    }
+    return availableSurveys;
   }
 
   /// Check if a survey is currently configured in settings
@@ -111,18 +321,17 @@ class SurveyConfigService {
   }
 
   /// Check if all required settings are configured
-  /// (surveyor ID and active survey)
   Future<bool> areSettingsConfigured() async {
     final surveyorId = await _settingsService.surveyorId;
     final activeSurvey = await _settingsService.activeSurvey;
 
     return surveyorId != null &&
-           surveyorId.isNotEmpty &&
-           activeSurvey != null &&
-           activeSurvey.isNotEmpty;
+        surveyorId.isNotEmpty &&
+        activeSurvey != null &&
+        activeSurvey.isNotEmpty;
   }
 
-  /// Clear the manifest cache (useful for testing or after updates)
+  /// Clear the manifest cache
   void clearCache() {
     _manifestCache.clear();
   }

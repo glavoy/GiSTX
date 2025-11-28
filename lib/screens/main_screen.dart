@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../services/settings_service.dart';
 import '../services/survey_config_service.dart';
 import 'questionnaire_selector_screen.dart';
@@ -30,6 +28,8 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _initialize() async {
+    // Initialize surveys (extract zips if needed)
+    await _surveyConfig.initializeSurveys();
     await _loadAvailableSurveys();
     await _loadSurveyName();
   }
@@ -46,38 +46,16 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _loadAvailableSurveys() async {
     try {
-      // List of known survey folders to check
-      const surveyFolders = [
-        'fake_household_survey',
-        'fake_clinical_trial',
-      ];
+      debugPrint('Scanning for surveys...');
+      final surveys = await _surveyConfig.getAvailableSurveys();
 
-      debugPrint(
-          'Scanning for survey manifests in ${surveyFolders.length} folders...');
-
-      for (final folder in surveyFolders) {
-        final manifestPath = 'assets/surveys/$folder/survey_manifest.json';
-
-        try {
-          debugPrint('Attempting to load: $manifestPath');
-          final manifestJson = await rootBundle.loadString(manifestPath);
-          final surveyData = json.decode(manifestJson);
-          final surveyName = surveyData['surveyName'] as String?;
-
-          debugPrint('Found survey: $surveyName');
-
-          if (surveyName != null && !_availableSurveys.contains(surveyName)) {
-            if (mounted) {
-              setState(() {
-                _availableSurveys.add(surveyName);
-              });
-            }
-            debugPrint('Added survey to list: $surveyName');
-          }
-        } catch (e) {
-          debugPrint('Could not load manifest from $manifestPath: $e');
-        }
+      if (mounted) {
+        setState(() {
+          _availableSurveys.clear();
+          _availableSurveys.addAll(surveys);
+        });
       }
+      debugPrint('Found ${surveys.length} surveys: $surveys');
     } catch (e) {
       debugPrint('Error scanning for surveys: $e');
     }
@@ -154,7 +132,8 @@ class _MainScreenState extends State<MainScreen> {
                   builder: (context) => const SettingsScreen(),
                 ),
               );
-              _loadSurveyName();
+              await _loadAvailableSurveys();
+              await _loadSurveyName();
             },
           ),
           IconButton(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/db_service.dart';
+import '../services/survey_config_service.dart';
 import 'main_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -17,7 +18,10 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initApp() async {
-    // Run DB init and minimum delay in parallel
+    // 1. Initialize surveys (extract zips)
+    await SurveyConfigService().initializeSurveys();
+
+    // 2. Run DB init and minimum delay in parallel
     await Future.wait([
       DbService.init(),
       Future.delayed(const Duration(seconds: 2)),

@@ -1,12 +1,22 @@
-// lib/services/survey_loader.dart
+import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:xml/xml.dart';
 import '../models/question.dart';
 
 class SurveyLoader {
+  /// Load and parse a survey XML from a local File.
+  static Future<List<Question>> loadFromFile(File file) async {
+    final xmlStr = await file.readAsString();
+    return _parseXml(xmlStr);
+  }
+
   /// Load and parse a survey XML from assets.
   static Future<List<Question>> loadFromAsset(String assetPath) async {
     final xmlStr = await rootBundle.loadString(assetPath);
+    return _parseXml(xmlStr);
+  }
+
+  static List<Question> _parseXml(String xmlStr) {
     final doc = XmlDocument.parse(xmlStr);
 
     final questions = <Question>[];
@@ -90,7 +100,7 @@ class SurveyLoader {
       if (dateRangeNode != null) {
         final minDateNode = dateRangeNode.getElement('min_date');
         minDate = minDateNode?.innerText.trim();
-        
+
         final maxDateNode = dateRangeNode.getElement('max_date');
         maxDate = maxDateNode?.innerText.trim();
       }
