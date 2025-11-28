@@ -1,3 +1,0 @@
-tablename,primarykey,displayname,isbase,linkingfield,parenttable,incrementfield,requireslink,idconfig,repeat_count_field,repeat_count_source,auto_start_repeat,repeat_enforce_count,display_order,display_fields
-household,hhid,Household Survey,1,hhid,,,0,"{""prefix"": ""GL"", ""fields"": [{""name"": ""community"", ""length"": 2}], ""incrementLength"": 3}",,,0,0,10,
-hh_members,"hhid,linenum",Household Member Survey,0,hhid,household,,1,,num_people,household,1,1,20,participantsname

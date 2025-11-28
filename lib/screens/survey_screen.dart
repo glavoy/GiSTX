@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/question.dart';
 import '../services/survey_loader.dart';
@@ -78,7 +79,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
             'No survey configured. Please configure settings first.');
       }
 
-      final questions = await SurveyLoader.loadFromAsset(assetPath);
+      final questions = await SurveyLoader.loadFromFile(File(assetPath));
 
       // 3) If we're editing an existing record, populate answers from the database
       if (widget.existingAnswers != null) {
@@ -113,7 +114,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
             'No survey configured. Please configure settings first.');
       }
 
-      return SurveyLoader.loadFromAsset(assetPath);
+      return SurveyLoader.loadFromFile(File(assetPath));
     }
   }
 

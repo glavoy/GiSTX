@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'dart:convert';
-import 'package:flutter/services.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:csv/csv.dart';
@@ -47,12 +48,14 @@ class DbService {
       // but the user requirement implies runtime creation and folder scanning.
 
       _log('Current working directory: ${Directory.current.path}');
-      final surveysDir = Directory('assets/surveys');
-      _log('Looking for surveys in: ${surveysDir.absolute.path}');
+
+      final surveysDir = await _getSurveysDirectory();
+
+      _log('Looking for surveys in: ${surveysDir.path}');
 
       if (!await surveysDir.exists()) {
         _log(
-            'Warning: assets/surveys directory not found at ${surveysDir.absolute.path}');
+            'Warning: surveys directory not found at ${surveysDir.path}. Surveys might not be extracted yet.');
         // Fallback: try to use the hardcoded list from SurveyConfigService or just return
         // For now, let's assume we can access it or we use the known list.
         await _initKnownSurveys();
@@ -92,22 +95,47 @@ class DbService {
       _log('Initializing database for survey: $surveyId');
 
       // 1. Read manifest
-      final manifestPath = 'assets/surveys/$surveyId/survey_manifest.json';
-      Map<String, dynamic> manifest;
-      try {
-        // Try loading from rootBundle first (standard Flutter asset)
-        final manifestJson = await rootBundle.loadString(manifestPath);
-        manifest = json.decode(manifestJson) as Map<String, dynamic>;
-      } catch (e) {
-        // Fallback to file IO if not in bundle (e.g. dynamically added)
-        final file = File(manifestPath);
-        if (await file.exists()) {
-          final manifestJson = await file.readAsString();
-          manifest = json.decode(manifestJson) as Map<String, dynamic>;
-        } else {
-          _logError('Manifest not found for $surveyId at $manifestPath');
-          return;
+      // We need to find the manifest file. Since we moved to dynamic loading,
+      // we should ask SurveyConfigService for the path or scan for it.
+      // However, DbService shouldn't depend on SurveyConfigService if possible to avoid circular deps.
+      // But SurveyConfigService depends on SettingsService, not DbService.
+      // So we can use SurveyConfigService here if we want, or replicate the logic.
+      // Replicating logic for now to keep it self-contained but using the known path structure.
+
+      // Replicating logic for now to keep it self-contained but using the known path structure.
+
+      final surveysDir = await _getSurveysDirectory();
+
+      // We need to find the folder for this surveyId
+      File? manifestFile;
+      if (await surveysDir.exists()) {
+        final entities = await surveysDir.list().toList();
+        for (final entity in entities) {
+          if (entity is Directory) {
+            final mFile = File(p.join(entity.path, 'survey_manifest.json'));
+            if (await mFile.exists()) {
+              try {
+                final content = await mFile.readAsString();
+                final jsonMap = json.decode(content);
+                if (jsonMap['surveyId'] == surveyId) {
+                  manifestFile = mFile;
+                  break;
+                }
+              } catch (e) {
+                // ignore
+              }
+            }
+          }
         }
+      }
+
+      Map<String, dynamic> manifest;
+      if (manifestFile != null) {
+        final manifestJson = await manifestFile.readAsString();
+        manifest = json.decode(manifestJson) as Map<String, dynamic>;
+      } else {
+        _logError('Manifest not found for surveyId: $surveyId');
+        return;
       }
 
       final dbName = manifest['databaseName'] as String?;
@@ -117,15 +145,29 @@ class DbService {
       }
 
       // 2. Determine DB path
-      // User requested: /assets/database folder
-      // We'll create this folder if it doesn't exist
-      final dbDir = Directory('assets/database');
+      // Windows: Documents/GiSTX/databases/
+      // Android: External Files Dir (accessible)
+
+      Directory baseDbDir;
+      if (Platform.isAndroid) {
+        final extDir = await getExternalStorageDirectory();
+        if (extDir == null) {
+          // Fallback to internal if external not available
+          baseDbDir = await getApplicationDocumentsDirectory();
+        } else {
+          baseDbDir = extDir;
+        }
+      } else {
+        // Windows/Linux/Mac
+        baseDbDir = await getApplicationDocumentsDirectory();
+      }
+
+      final dbDir = Directory(p.join(baseDbDir.path, 'GiSTX', 'databases'));
       if (!await dbDir.exists()) {
         await dbDir.create(recursive: true);
       }
-      // Use absolute path to ensure it goes exactly where we want,
-      // avoiding sqflite_common_ffi's default sandbox in .dart_tool
-      final dbPath = p.join(dbDir.absolute.path, dbName);
+
+      final dbPath = p.join(dbDir.path, dbName);
       _log('Database path for $surveyId: $dbPath');
 
       // 3. Open Database
@@ -150,6 +192,9 @@ class DbService {
     try {
       // 1. Create and Populate CRFS Table
       await _syncCrfsTable(surveyId, db, manifest);
+
+      // 1b. Create Form Changes Table
+      await _syncFormChangesTable(surveyId, db);
 
       // 2. Create Survey Tables from XMLs
       final xmlFiles = manifest['xmlFiles'] as List?;
@@ -200,22 +245,38 @@ class DbService {
     }
   }
 
+  static Future<void> _syncFormChangesTable(
+      String surveyId, Database db) async {
+    final tableExists = await _tableExists(db, 'formchanges');
+    if (!tableExists) {
+      _log('Creating formchanges table for $surveyId...');
+      await db.execute('''
+        CREATE TABLE formchanges (
+            changeid     INTEGER PRIMARY KEY AUTOINCREMENT,
+            tablename    TEXT NOT NULL,
+            fieldname    TEXT NOT NULL,
+            uniqueid     TEXT NOT NULL,
+            oldvalue     TEXT,
+            newvalue     TEXT,
+            changed_at   DATETIME DEFAULT (CURRENT_TIMESTAMP)
+        )
+      ''');
+    }
+  }
+
   static Future<void> _populateCrfsTable(
       String surveyId, Database db, String csvFilename) async {
     try {
-      final csvPath = 'assets/surveys/$surveyId/$csvFilename';
+      final surveysDir = await _getSurveysDirectory();
+      final surveyDir = Directory(p.join(surveysDir.path, surveyId));
+      final csvFile = File(p.join(surveyDir.path, csvFilename));
       String csvContent;
 
-      try {
-        csvContent = await rootBundle.loadString(csvPath);
-      } catch (e) {
-        final file = File(csvPath);
-        if (await file.exists()) {
-          csvContent = await file.readAsString();
-        } else {
-          _logError('CRFS metadata file not found: $csvPath');
-          return;
-        }
+      if (await csvFile.exists()) {
+        csvContent = await csvFile.readAsString();
+      } else {
+        _logError('CRFS metadata file not found: ${csvFile.path}');
+        return;
       }
 
       final List<List<dynamic>> csvData =
@@ -254,12 +315,23 @@ class DbService {
 
   static Future<void> _syncSurveyTable(
       String surveyId, Database db, String xmlFilename) async {
-    final assetPath = 'assets/surveys/$surveyId/$xmlFilename';
+    // Construct path to local file
+    final surveysDir = await _getSurveysDirectory();
+    final surveyDir = Directory(p.join(surveysDir.path, surveyId));
+    final xmlFile = File(p.join(surveyDir.path, xmlFilename));
     final tableName =
         p.basename(xmlFilename).toLowerCase().replaceAll('.xml', '');
 
     try {
-      final questions = await SurveyLoader.loadFromAsset(assetPath);
+      List<Question> questions;
+      if (await xmlFile.exists()) {
+        questions = await SurveyLoader.loadFromFile(xmlFile);
+      } else {
+        // Fallback to assets if local file missing (e.g. for bundled surveys if extraction failed?)
+        // But we expect extraction to have happened.
+        _logError('XML file not found at ${xmlFile.path}');
+        return;
+      }
       final dataQuestions =
           questions.where((q) => q.type != QuestionType.information).toList();
 
@@ -634,6 +706,17 @@ class DbService {
     } catch (e) {
       return [];
     }
+  }
+
+  static Future<Directory> _getSurveysDirectory() async {
+    Directory baseDir;
+    if (Platform.isAndroid) {
+      baseDir = await getExternalStorageDirectory() ??
+          await getApplicationDocumentsDirectory();
+    } else {
+      baseDir = await getApplicationDocumentsDirectory();
+    }
+    return Directory(p.join(baseDir.path, 'GiSTX', 'surveys'));
   }
 
   static void _log(String message) {
