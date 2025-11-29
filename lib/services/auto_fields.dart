@@ -18,7 +18,7 @@ import 'package:uuid/uuid.dart';
 ///   you can later make this Future and await. For now we keep it sync.
 
 typedef AutoFieldFn = String Function(
-    AnswerMap answers, Question q, bool isEditMode);
+    AnswerMap answers, Question q, bool isEditMode, String? surveyId);
 
 class AutoFields {
   /// Public getter for the registry
@@ -32,6 +32,7 @@ class AutoFields {
     'stoptime': _computeStopTime,
     'lastmod': _computeLastModified,
     'swver': _computeSoftwareVersion,
+    'survey_id': _computeSurveyId,
     // 'subjid': _computeSubjId,  // This is now handled in SurveyScreen._showDone
     // 'hhid': _computeSubjId,    // This is now handled in SurveyScreen._showDone
     // Add more automatic variables here ...
@@ -41,14 +42,17 @@ class AutoFields {
   /// otherwise computes once and stores it in `answers`.
   /// In edit mode, preserves certain fields like uniqueid, starttime, stoptime
   static String compute(AnswerMap answers, Question q,
-      {bool isEditMode = false}) {
+      {bool isEditMode = false, String? surveyId}) {
     final key = q.fieldName;
     final existing = answers[key];
 
     // In edit mode, preserve existing values for certain fields
     if (isEditMode && existing is String && existing.isNotEmpty) {
       // Always preserve these fields in edit mode
-      if (key == 'uniqueid' || key == 'starttime' || key == 'stoptime') {
+      if (key == 'uniqueid' ||
+          key == 'starttime' ||
+          key == 'stoptime' ||
+          key == 'survey_id') {
         return existing;
       }
       // For lastmod, we want to update it even in edit mode
@@ -70,19 +74,19 @@ class AutoFields {
       return val;
     }
 
-    final value = fn(answers, q, isEditMode);
+    final value = fn(answers, q, isEditMode, surveyId);
     answers[key] = value;
     return value;
   }
 
   static String _computeStartTime(
-      AnswerMap answers, Question q, bool isEditMode) {
+      AnswerMap answers, Question q, bool isEditMode, String? surveyId) {
     // In edit mode, preserve existing starttime (handled in compute method)
     return DateTime.now().toIso8601String();
   }
 
   static String _computeStopTime(
-      AnswerMap answers, Question q, bool isEditMode) {
+      AnswerMap answers, Question q, bool isEditMode, String? surveyId) {
     // Same idea as starttime: when this automatic question is *shown*,
     // we stamp the stop time. You *do not* need to set it in _showDone().
     // In edit mode, preserve existing stoptime (handled in compute method)
@@ -90,19 +94,24 @@ class AutoFields {
   }
 
   static String _computeLastModified(
-      AnswerMap answers, Question q, bool isEditMode) {
+      AnswerMap answers, Question q, bool isEditMode, String? surveyId) {
     // Last modified timestamp - updates whenever any answer changes
     // This ALWAYS updates, even in edit mode
     return DateTime.now().toIso8601String();
   }
 
   static String _computeSoftwareVersion(
-      AnswerMap answers, Question q, bool isEditMode) {
+      AnswerMap answers, Question q, bool isEditMode, String? surveyId) {
     return AppConfig.softwareVersion;
   }
 
+  static String _computeSurveyId(
+      AnswerMap answers, Question q, bool isEditMode, String? surveyId) {
+    return surveyId ?? 'unknown';
+  }
+
   static String _computeUniqueId(
-      AnswerMap answers, Question q, bool isEditMode) {
+      AnswerMap answers, Question q, bool isEditMode, String? surveyId) {
     // Generate once per record.
     // In edit mode, preserve existing uniqueid (handled in compute method)
     const uuid = Uuid();

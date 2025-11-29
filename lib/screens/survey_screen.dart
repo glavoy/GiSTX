@@ -50,6 +50,13 @@ class _SurveyScreenState extends State<SurveyScreen> {
   List<Question>?
       _loadedQuestions; // Holds the questions after future completes
   bool _isSaving = false; // Flag to prevent multiple submissions
+  String? _activeSurveyId;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
   String? _logicError; // Holds the current logic check error message
 
   @override
@@ -68,6 +75,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
       if (surveyId == null) {
         throw Exception('No active survey found');
       }
+      _activeSurveyId = surveyId;
 
       // 2) load questions for UI from the survey XML
       // Get the asset path from the survey config service
@@ -527,14 +535,17 @@ class _SurveyScreenState extends State<SurveyScreen> {
   }
 
   // Previous question lookup is handled by _history
-
   /// Process an automatic question by calculating its value
   void _processAutomaticQuestion(Question q) {
     // The automatic value calculation is already handled in QuestionView.initState
     // But we can also do it here for automatic questions we skip over
     if (_answers[q.fieldName] == null) {
-      final value =
-          AutoFields.compute(_answers, q, isEditMode: widget.uniqueId != null);
+      final value = AutoFields.compute(
+        _answers,
+        q,
+        isEditMode: widget.uniqueId != null,
+        surveyId: _activeSurveyId,
+      );
       _answers[q.fieldName] = value;
     }
   }

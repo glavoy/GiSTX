@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import '../services/ftp_service.dart';
 import '../services/settings_service.dart';
 import '../services/survey_config_service.dart';
-import '../services/db_service.dart';
 
 class SyncScreen extends StatefulWidget {
   const SyncScreen({super.key});
@@ -28,7 +27,7 @@ class _SyncScreenState extends State<SyncScreen> {
   String? _statusMessage;
   String? _activeSurveyName;
 
-  DateTime? _lastBackupTime;
+  DateTime? _lastUploadTime;
 
   @override
   void initState() {
@@ -42,19 +41,49 @@ class _SyncScreenState extends State<SyncScreen> {
       setState(() {
         _activeSurveyName = name;
       });
-      _loadBackupTime();
+      _loadLastUploadTime();
     }
   }
 
-  Future<void> _loadBackupTime() async {
+  Future<void> _loadLastUploadTime() async {
     if (_activeSurveyName == null) return;
     final surveyId = await _surveyConfig.getSurveyId(_activeSurveyName!);
     if (surveyId != null) {
-      final time = await DbService.getLastBackupTime(surveyId);
-      if (mounted) {
-        setState(() {
-          _lastBackupTime = time;
+      try {
+        final outboxDir = await _surveyConfig.getOutboxDirectory();
+        if (!await outboxDir.exists()) {
+          if (mounted) setState(() => _lastUploadTime = null);
+          return;
+        }
+
+        final files = await outboxDir.list().toList();
+        final surveyFiles = files.where((f) {
+          final name = p.basename(f.path);
+          return f is File &&
+              name.startsWith(surveyId) &&
+              name.endsWith('.zip');
+        }).toList();
+
+        if (surveyFiles.isEmpty) {
+          if (mounted) setState(() => _lastUploadTime = null);
+          return;
+        }
+
+        // Sort by modification time (descending)
+        surveyFiles.sort((a, b) {
+          return b.statSync().modified.compareTo(a.statSync().modified);
         });
+
+        final lastFile = surveyFiles.first;
+        final lastMod = lastFile.statSync().modified;
+
+        if (mounted) {
+          setState(() {
+            _lastUploadTime = lastMod;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading last upload time: $e');
       }
     }
   }
@@ -237,6 +266,8 @@ class _SyncScreenState extends State<SyncScreen> {
               backgroundColor: Colors.green,
             ),
           );
+          // Update last upload time
+          _loadLastUploadTime();
         }
       } else {
         throw Exception('Upload failed.');
@@ -413,9 +444,9 @@ class _SyncScreenState extends State<SyncScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _lastBackupTime != null
-                  ? 'Last backup: ${DateFormat('MMM d, yyyy HH:mm').format(_lastBackupTime!)}'
-                  : 'No backups yet',
+              _lastUploadTime != null
+                  ? 'Last upload: ${DateFormat('MMM d, yyyy HH:mm').format(_lastUploadTime!)}'
+                  : 'No uploads yet',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey[600],
