@@ -169,6 +169,18 @@ class SurveyConfigService {
     return Directory(p.join(baseDir.path, 'GiSTX', 'surveys'));
   }
 
+  /// Get the local directory where outbox files are stored
+  Future<Directory> getOutboxDirectory() async {
+    Directory baseDir;
+    if (Platform.isAndroid) {
+      baseDir = await getExternalStorageDirectory() ??
+          await getApplicationDocumentsDirectory();
+    } else {
+      baseDir = await getApplicationDocumentsDirectory();
+    }
+    return Directory(p.join(baseDir.path, 'GiSTX', 'outbox'));
+  }
+
   /// Get the survey ID from the survey name stored in settings
   /// Returns null if no survey is selected or if survey not found
   Future<String?> getActiveSurveyId() async {
