@@ -1,8 +1,6 @@
 import '../models/question.dart';
 import '../config/app_config.dart';
 import 'package:uuid/uuid.dart';
-// import 'id_generator.dart';
-// import 'package:flutter/material.dart';
 
 /// This is the ONLY file a programmer edits for automatic variables.
 /// Add/edit entries in [_registry] to support new automatic fields.
@@ -33,8 +31,7 @@ class AutoFields {
     'lastmod': _computeLastModified,
     'swver': _computeSoftwareVersion,
     'survey_id': _computeSurveyId,
-    // 'subjid': _computeSubjId,  // This is now handled in SurveyScreen._showDone
-    // 'hhid': _computeSubjId,    // This is now handled in SurveyScreen._showDone
+
     // Add more automatic variables here ...
   };
 

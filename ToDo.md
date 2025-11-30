@@ -1,8 +1,10 @@
 ### To Do
 - Update GiSTXConfig to create the json files - add survey_id to the json config in GiSTConfig
-- Add utilization of csv files in the app
+- Add utilization of csv files in the app - nested selects as well
+- add functionality so that structures/names can be the options for a question
 - Add time type to gistx
 - examine "idconfig" - have option of entering the subjid manually
+- subjid and hhid - these should be normal automatic variables
 
 
 - add functionality to modify a table if necessary - for example changing a field type from text to int and vice versa
