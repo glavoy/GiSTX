@@ -100,7 +100,7 @@ class DbService {
         final entities = await surveysDir.list().toList();
         for (final entity in entities) {
           if (entity is Directory) {
-            final mFile = File(p.join(entity.path, 'survey_manifest.json'));
+            final mFile = File(p.join(entity.path, 'survey_manifest.gistx'));
             if (await mFile.exists()) {
               try {
                 final content = await mFile.readAsString();

@@ -103,7 +103,7 @@ class SurveyConfigService {
 
       for (final entity in entities) {
         if (entity is Directory) {
-          final manifestPath = p.join(entity.path, 'survey_manifest.json');
+          final manifestPath = p.join(entity.path, 'survey_manifest.gistx');
           final file = File(manifestPath);
           if (await file.exists()) {
             final manifest = await _loadManifestFromFile(file);
@@ -204,7 +204,7 @@ class SurveyConfigService {
     for (final entity in entities) {
       if (entity is Directory) {
         try {
-          final manifestPath = p.join(entity.path, 'survey_manifest.json');
+          final manifestPath = p.join(entity.path, 'survey_manifest.gistx');
           final manifestFile = File(manifestPath);
 
           if (await manifestFile.exists()) {
@@ -259,7 +259,7 @@ class SurveyConfigService {
     final entities = await surveysDir.list().toList();
     for (final entity in entities) {
       if (entity is Directory) {
-        final manifestPath = p.join(entity.path, 'survey_manifest.json');
+        final manifestPath = p.join(entity.path, 'survey_manifest.gistx');
         if (await File(manifestPath).exists()) {
           final manifest = await _loadManifestFromFile(File(manifestPath));
           if (manifest['surveyId'] == surveyId) {
@@ -280,7 +280,7 @@ class SurveyConfigService {
     final entities = await surveysDir.list().toList();
     for (final entity in entities) {
       if (entity is Directory) {
-        final manifestPath = p.join(entity.path, 'survey_manifest.json');
+        final manifestPath = p.join(entity.path, 'survey_manifest.gistx');
         final file = File(manifestPath);
         if (await file.exists()) {
           final manifest = await _loadManifestFromFile(file);
@@ -304,7 +304,7 @@ class SurveyConfigService {
     for (final entity in entities) {
       if (entity is Directory) {
         try {
-          final manifestPath = p.join(entity.path, 'survey_manifest.json');
+          final manifestPath = p.join(entity.path, 'survey_manifest.gistx');
           final file = File(manifestPath);
           if (await file.exists()) {
             final manifest = await _loadManifestFromFile(file);
@@ -330,7 +330,7 @@ class SurveyConfigService {
     for (final entity in entities) {
       if (entity is Directory) {
         try {
-          final manifestPath = p.join(entity.path, 'survey_manifest.json');
+          final manifestPath = p.join(entity.path, 'survey_manifest.gistx');
           final file = File(manifestPath);
           if (await file.exists()) {
             final manifest = await _loadManifestFromFile(file);
