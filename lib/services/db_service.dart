@@ -58,7 +58,6 @@ class DbService {
             'Warning: surveys directory not found at ${surveysDir.path}. Surveys might not be extracted yet.');
         // Fallback: try to use the hardcoded list from SurveyConfigService or just return
         // For now, let's assume we can access it or we use the known list.
-        await _initKnownSurveys();
         return;
       }
 
@@ -73,17 +72,6 @@ class DbService {
       }
     } catch (e) {
       _logError('Error scanning survey directories: $e');
-      // Fallback to known surveys
-      await _initKnownSurveys();
-    }
-  }
-
-  static Future<void> _initKnownSurveys() async {
-    // This is a fallback if we can't list the directory
-    // We should probably expose the list from SurveyConfigService, but for now hardcode or import
-    const knownSurveys = ['fake_household_survey', 'fake_clinical_trial'];
-    for (final surveyId in knownSurveys) {
-      await _initDatabaseForSurvey(surveyId);
     }
   }
 
