@@ -25,6 +25,7 @@ class SurveyScreen extends StatefulWidget {
       incrementField; // Field to auto-increment (e.g., 'linenum', 'netnum')
   final int? repeatIndex; // Current iteration (e.g., 2)
   final int? repeatTotal; // Total iterations (e.g., 5)
+  final String? repeatEntityName; // Entity name for repeat surveys (e.g., "Member", "Structure", "Net")
 
   const SurveyScreen({
     super.key,
@@ -38,6 +39,7 @@ class SurveyScreen extends StatefulWidget {
     this.incrementField,
     this.repeatIndex,
     this.repeatTotal,
+    this.repeatEntityName,
   });
 
   @override
@@ -868,7 +870,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      'Member ${widget.repeatIndex} of ${widget.repeatTotal}',
+                      '${widget.repeatEntityName ?? "Member"} ${widget.repeatIndex} of ${widget.repeatTotal}',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -1263,6 +1265,14 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
     int completedCount = 0;
 
+    // Convert displayName to singular form for entity name
+    // "Household members" -> "Household member"
+    // "Sleeping Structures" -> "Sleeping Structure"
+    String entityName = displayName;
+    if (entityName.endsWith('s')) {
+      entityName = entityName.substring(0, entityName.length - 1);
+    }
+
     for (int i = 1; i <= repeatCount; i++) {
       if (!mounted) break;
 
@@ -1276,6 +1286,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
             incrementField: crfConfig['incrementfield']?.toString(),
             repeatIndex: i,
             repeatTotal: repeatCount,
+            repeatEntityName: entityName,
           ),
         ),
       );
@@ -1324,13 +1335,18 @@ class _SurveyScreenState extends State<SurveyScreen> {
   /// Show dialog when user must complete all members
   Future<bool> _showMustCompleteDialog(
       BuildContext context, int total, int current) async {
+    final entityName = widget.repeatEntityName ?? 'member';
+    final entityNamePlural = widget.repeatEntityName != null
+        ? '${widget.repeatEntityName}s'
+        : 'members';
+
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Must Complete All Members'),
+        title: Text('Must Complete All $entityNamePlural'),
         content: Text(
-            'You must add all $total members.\n\nCurrently on member $current of $total.'),
+            'You must add all $total $entityNamePlural.\n\nCurrently on ${entityName.toLowerCase()} $current of $total.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
