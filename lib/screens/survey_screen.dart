@@ -515,20 +515,29 @@ class _SurveyScreenState extends State<SurveyScreen> {
     setState(() {
       _currentQuestion = nextIndex;
       _logicError = null; // Clear error on navigation
+
+      // Re-evaluate logic checks for the new question
+      // This ensures that if user went back and changed a dependent field,
+      // the logic check runs again (e.g., hhid_verif after hhid changed)
+      if (nextIndex < qs.length) {
+        final nextQuestion = qs[nextIndex];
+        _logicError = LogicService.evaluateLogicChecks(nextQuestion, _answers);
+      }
     });
 
     // Show verification reminder for hhid_verif question
-    if (nextIndex < qs.length) {
-      final nextQuestion = qs[nextIndex];
-      if (nextQuestion.fieldName.toLowerCase() == 'hhid_verif') {
-        await _showVerificationReminder('hhid');
-      }
-    }
+    // if (nextIndex < qs.length) {
+    //   final nextQuestion = qs[nextIndex];
+    //   if (nextQuestion.fieldName.toLowerCase() == 'hhid_verif') {
+    //     await _showVerificationReminder('hhid');
+    //   }
+    // }
   }
 
   /// Find the next question that should be displayed
   /// Handles automatic questions and preskip conditions
-  Future<int> _findNextDisplayedQuestion(List<Question> qs, int startIndex) async {
+  Future<int> _findNextDisplayedQuestion(
+      List<Question> qs, int startIndex) async {
     int index = startIndex;
 
     while (index < qs.length) {
@@ -598,6 +607,12 @@ class _SurveyScreenState extends State<SurveyScreen> {
     setState(() {
       _currentQuestion = _history.removeLast();
       _logicError = null; // Clear error on navigation
+
+      // Re-evaluate logic checks for the question we're returning to
+      if (_loadedQuestions != null && _currentQuestion < _loadedQuestions!.length) {
+        final question = _loadedQuestions![_currentQuestion];
+        _logicError = LogicService.evaluateLogicChecks(question, _answers);
+      }
     });
   }
 
@@ -659,13 +674,12 @@ class _SurveyScreenState extends State<SurveyScreen> {
   Future<void> _processAutomaticQuestion(Question q) async {
     // The automatic value calculation is already handled in QuestionView.initState
     // But we can also do it here for automatic questions we skip over
-    if (_answers[q.fieldName] != null) {
-      return; // Already computed
-    }
 
     // Check if this is a primary key field that needs ID generation
     final isIdField = !AutoFields.getRegistry().containsKey(q.fieldName);
 
+    // For primary key fields, ALWAYS regenerate (don't use cached value)
+    // This ensures that if user goes back and changes dependent fields, the ID updates
     if (isIdField && widget.idConfig != null && widget.idConfig!.isNotEmpty) {
       // This is a primary key field (hhid, subjid, etc.)
       // Generate it using IdGenerator
@@ -687,7 +701,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
               answers: _answers,
             );
             _answers[q.fieldName] = generatedId;
-            debugPrint('Generated ID "$generatedId" for field "${q.fieldName}" in real-time');
+            debugPrint(
+                'Generated ID "$generatedId" for field "${q.fieldName}" in real-time');
             return;
           }
         }
@@ -699,6 +714,11 @@ class _SurveyScreenState extends State<SurveyScreen> {
       _answers[q.fieldName] = '-9';
     } else {
       // Regular automatic field (starttime, uniqueid, etc.)
+      // For these, only compute if not already present
+      if (_answers[q.fieldName] != null) {
+        return; // Already computed
+      }
+
       final value = AutoFields.compute(
         _answers,
         q,
@@ -1169,7 +1189,10 @@ class _SurveyScreenState extends State<SurveyScreen> {
                 linkingValue.toString(),
                 crf,
               );
-              return; // Don't show success dialog, loop handles navigation
+              // Don't return - continue to check for more repeating sections
+            } else {
+              // User declined to start this repeat section - skip to next
+              continue;
             }
           } else if (autoStartRepeat == 2) {
             // Force mode - auto start
@@ -1182,7 +1205,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
               linkingValue.toString(),
               crf,
             );
-            return; // Don't show success dialog, loop handles navigation
+            // Don't return - continue to check for more repeating sections
           }
         }
       }
@@ -1283,7 +1306,9 @@ class _SurveyScreenState extends State<SurveyScreen> {
     if (!mounted) return;
 
     // After loop, check if count matches
-    await _checkRepeatCountMismatch(
+    // Note: This will handle the mismatch but NOT show success dialog yet
+    // We need to check for more repeating sections first
+    await _handleRepeatCountMismatch(
       context,
       childTableName,
       displayName,
@@ -1323,8 +1348,9 @@ class _SurveyScreenState extends State<SurveyScreen> {
     return result ?? true;
   }
 
-  /// Check for count mismatch and handle based on enforce mode
-  Future<void> _checkRepeatCountMismatch(
+  /// Handle repeat count mismatch (without showing success dialog)
+  /// Returns true if everything is ok, false if there was an issue
+  Future<bool> _handleRepeatCountMismatch(
     BuildContext context,
     String childTableName,
     String displayName,
@@ -1336,7 +1362,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
     String? repeatCountField,
   ) async {
     final surveyId = await SurveyConfigService().getActiveSurveyId();
-    if (surveyId == null) return;
+    if (surveyId == null) return false;
 
     // Get actual count from database
     final actualCount = await DbService.getRecordCount(
@@ -1347,18 +1373,16 @@ class _SurveyScreenState extends State<SurveyScreen> {
     );
 
     if (actualCount == expectedCount) {
-      // Perfect match, show success and return
-      _showSaveSuccessDialog(context);
-      return;
+      // Perfect match
+      return true;
     }
 
     // Mismatch detected
     debugPrint('Count mismatch: expected=$expectedCount, actual=$actualCount');
 
     if (enforceCountMode == 0) {
-      // Flexible mode - just show success
-      _showSaveSuccessDialog(context);
-      return;
+      // Flexible mode - allow any count
+      return true;
     } else if (enforceCountMode == 1) {
       // Warn mode - show dialog with options
       final action = await _showCountMismatchDialog(
@@ -1386,6 +1410,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
         debugPrint(
             'Updated $parentTableName.$repeatCountField to $actualCount');
       }
+      return true;
     } else if (enforceCountMode == 3) {
       // Auto-sync mode - silently update parent record
       if (repeatCountField != null) {
@@ -1405,9 +1430,10 @@ class _SurveyScreenState extends State<SurveyScreen> {
         debugPrint(
             'Auto-synced $parentTableName.$repeatCountField to $actualCount');
       }
+      return true;
     }
 
-    _showSaveSuccessDialog(context);
+    return true;
   }
 
   /// Show count mismatch warning dialog
@@ -1441,64 +1467,64 @@ class _SurveyScreenState extends State<SurveyScreen> {
   }
 
   /// Show verification reminder dialog before user enters verification field
-  Future<void> _showVerificationReminder(String fieldToVerify) async {
-    final value = _answers[fieldToVerify]?.toString();
-    if (value == null || value.isEmpty) return;
+  // Future<void> _showVerificationReminder(String fieldToVerify) async {
+  //   final value = _answers[fieldToVerify]?.toString();
+  //   if (value == null || value.isEmpty) return;
 
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.info_outline, color: Theme.of(context).primaryColor),
-            const SizedBox(width: 8),
-            const Text('Please Verify'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'You entered the following value for ${fieldToVerify.toUpperCase()}:',
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Text(
-                value,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Please re-enter this value in the next field to verify.',
-              style: TextStyle(fontSize: 13),
-            ),
-          ],
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
+  //   await showDialog(
+  //     context: context,
+  //     barrierDismissible: false,
+  //     builder: (context) => AlertDialog(
+  //       title: Row(
+  //         children: [
+  //           Icon(Icons.info_outline, color: Theme.of(context).primaryColor),
+  //           const SizedBox(width: 8),
+  //           const Text('Please Verify'),
+  //         ],
+  //       ),
+  //       content: Column(
+  //         mainAxisSize: MainAxisSize.min,
+  //         crossAxisAlignment: CrossAxisAlignment.start,
+  //         children: [
+  //           Text(
+  //             'You entered the following value for ${fieldToVerify.toUpperCase()}:',
+  //             style: const TextStyle(fontWeight: FontWeight.w500),
+  //           ),
+  //           const SizedBox(height: 12),
+  //           Container(
+  //             padding: const EdgeInsets.all(12),
+  //             decoration: BoxDecoration(
+  //               color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+  //               borderRadius: BorderRadius.circular(8),
+  //               border: Border.all(
+  //                 color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+  //               ),
+  //             ),
+  //             child: Text(
+  //               value,
+  //               style: TextStyle(
+  //                 fontSize: 20,
+  //                 fontWeight: FontWeight.bold,
+  //                 color: Theme.of(context).colorScheme.primary,
+  //               ),
+  //             ),
+  //           ),
+  //           const SizedBox(height: 12),
+  //           const Text(
+  //             'Please re-enter this value in the next field to verify.',
+  //             style: TextStyle(fontSize: 13),
+  //           ),
+  //         ],
+  //       ),
+  //       actions: [
+  //         FilledButton(
+  //           onPressed: () => Navigator.pop(context),
+  //           child: const Text('OK'),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   /// Show save success dialog
   void _showSaveSuccessDialog(BuildContext context) {
