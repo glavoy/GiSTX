@@ -87,16 +87,23 @@ class IdGenerator {
 
       // Query database to find the next increment number
       final baseIdStr = baseId.toString();
-      final nextIncrement = await _getNextIncrement(
-        surveyId: surveyId,
-        tableName: tableName,
-        baseId: baseIdStr,
-        incrementLength: config.incrementLength,
-      );
 
       // Build the complete ID
-      final completeId =
-          '$baseIdStr${nextIncrement.toString().padLeft(config.incrementLength, '0')}';
+      String completeId;
+      if (config.incrementLength == 0) {
+        // No auto-increment suffix - just use the base ID
+        completeId = baseIdStr;
+      } else {
+        // Add auto-increment suffix
+        final nextIncrement = await _getNextIncrement(
+          surveyId: surveyId,
+          tableName: tableName,
+          baseId: baseIdStr,
+          incrementLength: config.incrementLength,
+        );
+        completeId =
+            '$baseIdStr${nextIncrement.toString().padLeft(config.incrementLength, '0')}';
+      }
 
       debugPrint('Generated ID: $completeId');
       return completeId;
