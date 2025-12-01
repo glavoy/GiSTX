@@ -510,7 +510,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
     }
 
     // Skip automatic questions and evaluate preskips
-    nextIndex = _findNextDisplayedQuestion(qs, nextIndex);
+    nextIndex = await _findNextDisplayedQuestion(qs, nextIndex);
 
     setState(() {
       _currentQuestion = nextIndex;
@@ -528,7 +528,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
   /// Find the next question that should be displayed
   /// Handles automatic questions and preskip conditions
-  int _findNextDisplayedQuestion(List<Question> qs, int startIndex) {
+  Future<int> _findNextDisplayedQuestion(List<Question> qs, int startIndex) async {
     int index = startIndex;
 
     while (index < qs.length) {
@@ -536,7 +536,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
       // Process and skip automatic questions
       if (q.type == QuestionType.automatic) {
-        _processAutomaticQuestion(q);
+        await _processAutomaticQuestion(q);
         index++;
         continue;
       }
@@ -656,10 +656,49 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
   // Previous question lookup is handled by _history
   /// Process an automatic question by calculating its value
-  void _processAutomaticQuestion(Question q) {
+  Future<void> _processAutomaticQuestion(Question q) async {
     // The automatic value calculation is already handled in QuestionView.initState
     // But we can also do it here for automatic questions we skip over
-    if (_answers[q.fieldName] == null) {
+    if (_answers[q.fieldName] != null) {
+      return; // Already computed
+    }
+
+    // Check if this is a primary key field that needs ID generation
+    final isIdField = !AutoFields.getRegistry().containsKey(q.fieldName);
+
+    if (isIdField && widget.idConfig != null && widget.idConfig!.isNotEmpty) {
+      // This is a primary key field (hhid, subjid, etc.)
+      // Generate it using IdGenerator
+      try {
+        final tableName =
+            widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
+        final surveyId = await SurveyConfigService().getActiveSurveyId();
+
+        if (surveyId != null) {
+          // Check if all required fields are present
+          if (IdGenerator.validateIdFields(
+            idConfigJson: widget.idConfig!,
+            answers: _answers,
+          )) {
+            final generatedId = await IdGenerator.generateId(
+              surveyId: surveyId,
+              tableName: tableName,
+              idConfigJson: widget.idConfig!,
+              answers: _answers,
+            );
+            _answers[q.fieldName] = generatedId;
+            debugPrint('Generated ID "$generatedId" for field "${q.fieldName}" in real-time');
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint('Error generating ID for ${q.fieldName}: $e');
+      }
+
+      // Fallback if generation fails
+      _answers[q.fieldName] = '-9';
+    } else {
+      // Regular automatic field (starttime, uniqueid, etc.)
       final value = AutoFields.compute(
         _answers,
         q,
@@ -672,7 +711,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
   /// Skip to the first question that should be displayed (on initial load)
   /// Skips automatic questions and primary key questions in edit mode
-  void _skipToFirstDisplayedQuestion(List<Question> questions) {
+  Future<void> _skipToFirstDisplayedQuestion(List<Question> questions) async {
     if (_currentQuestion == 0) {
       int index = 0;
 
@@ -682,7 +721,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
         // Process and skip automatic questions
         if (q.type == QuestionType.automatic) {
-          _processAutomaticQuestion(q);
+          await _processAutomaticQuestion(q);
           index++;
           continue;
         }
@@ -744,8 +783,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
         // Skip automatic and information questions on initial load
         if (_currentQuestion == 0) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _skipToFirstDisplayedQuestion(questions);
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await _skipToFirstDisplayedQuestion(questions);
           });
         }
 
@@ -965,69 +1004,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
     // This ensures data consistency (e.g., clearing pregnancy data if sex changed to male)
     _clearSkippedAnswers(questions);
 
-    // --- NEW: Synchronous ID Generation ---
-    if (widget.idConfig != null && widget.idConfig!.isNotEmpty) {
-      // Validate that all required fields are present
-      if (!IdGenerator.validateIdFields(
-        idConfigJson: widget.idConfig!,
-        answers: _answers,
-      )) {
-        // Get the list of missing fields to show in the error message
-        final required = IdGenerator.getRequiredFields(widget.idConfig!);
-        final missing = required
-            .where((f) => _answers[f] == null || _answers[f].toString().isEmpty)
-            .toList();
-
-        // Show an error dialog and stop
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Missing Information'),
-            content: Text(
-                'Cannot generate Subject ID. Please go back and answer the following questions:\n\n- ${missing.join('\n- ')}'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-        return; // Stop the save process
-      }
-
-      // Generate the ID
-      final tableName =
-          widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
-
-      final surveyId = await SurveyConfigService().getActiveSurveyId();
-      if (surveyId == null) return;
-
-      final generatedId = await IdGenerator.generateId(
-        surveyId: surveyId,
-        tableName: tableName,
-        idConfigJson: widget.idConfig!,
-        answers: _answers,
-      );
-
-      // Add the generated ID to the answers map for the correct field (subjid or hhid)
-      // We find the field by looking for an automatic question that isn't in the registry
-      final idHolderField = questions
-          .firstWhere(
-            (q) =>
-                q.type == QuestionType.automatic &&
-                !AutoFields.getRegistry().containsKey(q.fieldName),
-            orElse: () => Question(
-                fieldName: 'subjid',
-                type: QuestionType.automatic,
-                fieldType: 'text'), // fallback
-          )
-          .fieldName;
-
-      _answers[idHolderField] = generatedId;
-      debugPrint('Generated ID "$generatedId" for field "$idHolderField"');
-    }
-    // --- End of ID Generation ---
+    // Note: Primary key ID (hhid/subjid) is now generated in real-time
+    // when the automatic question is processed, not here at save time
 
     // Check if there are any changes (for edit mode only)
     if (widget.uniqueId != null && !_hasChanges()) {
