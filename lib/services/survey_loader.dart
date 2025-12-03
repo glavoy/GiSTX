@@ -100,7 +100,7 @@ class SurveyLoader {
 
           final distinctNode = responsesNode.getElement('distinct');
           final distinct = distinctNode == null
-              ? true  // Default to true when element is absent
+              ? true // Default to true when element is absent
               : distinctNode.innerText.trim().toLowerCase() == 'true';
 
           final emptyMessageNode = responsesNode.getElement('empty_message');
@@ -109,11 +109,13 @@ class SurveyLoader {
           // Parse optional don't_know and not_in_list nodes
           final dontKnowNode = responsesNode.getElement('dont_know');
           final dontKnowValue = dontKnowNode?.getAttribute('value');
-          final dontKnowLabel = dontKnowNode?.getAttribute('label') ?? "Don't know";
+          final dontKnowLabel =
+              dontKnowNode?.getAttribute('label') ?? "Don't know";
 
           final notInListNode = responsesNode.getElement('not_in_list');
           final notInListValue = notInListNode?.getAttribute('value');
-          final notInListLabel = notInListNode?.getAttribute('label') ?? "Not in this list";
+          final notInListLabel =
+              notInListNode?.getAttribute('label') ?? "Not in this list";
 
           responseConfig = ResponseConfig(
             source: source,
@@ -138,7 +140,29 @@ class SurveyLoader {
 
       // Parse logic check string
       final logicCheckNode = q.getElement('logic_check');
-      final logicCheck = logicCheckNode?.innerText.trim();
+      LogicCheck? logicCheck;
+      if (logicCheckNode != null) {
+        var msg = logicCheckNode.getAttribute('message');
+        var condition = logicCheckNode.innerText.trim();
+
+        // Handle legacy format: "condition; 'message'"
+        if (condition.contains(';')) {
+          final parts = condition.split(';');
+          if (parts.length >= 2) {
+            condition = parts[0].trim();
+            // If message attribute wasn't provided, use the one from the string
+            if (msg == null) {
+              msg = parts[1].trim().replaceAll("'", "");
+            }
+          }
+        }
+
+        msg ??= 'Invalid value';
+
+        if (condition.isNotEmpty) {
+          logicCheck = LogicCheck(message: msg, condition: condition);
+        }
+      }
 
       // Parse special response values (for date fields)
       final dontKnowNode = q.getElement('dont_know');
@@ -161,15 +185,19 @@ class SurveyLoader {
       }
 
       // Parse date range
-      String? minDate;
-      String? maxDate;
+      DateTime? minDate;
+      DateTime? maxDate;
       final dateRangeNode = q.getElement('date_range');
       if (dateRangeNode != null) {
         final minDateNode = dateRangeNode.getElement('min_date');
-        minDate = minDateNode?.innerText.trim();
+        if (minDateNode != null) {
+          minDate = _parseDate(minDateNode.innerText.trim());
+        }
 
         final maxDateNode = dateRangeNode.getElement('max_date');
-        maxDate = maxDateNode?.innerText.trim();
+        if (maxDateNode != null) {
+          maxDate = _parseDate(maxDateNode.innerText.trim());
+        }
       }
 
       // Parse unique check
@@ -181,6 +209,10 @@ class SurveyLoader {
           message: messageNode?.innerText.trim(),
         );
       }
+
+      // Parse calculation
+      final calculationNode = q.getElement('calculation');
+      final calculation = _parseCalculation(calculationNode);
 
       questions.add(
         Question(
@@ -200,10 +232,154 @@ class SurveyLoader {
           minDate: minDate,
           maxDate: maxDate,
           uniqueCheck: uniqueCheck,
+          calculation: calculation,
         ),
       );
     }
     return questions;
+  }
+
+  static String? _sanitizeField(String? field) {
+    if (field == null) return null;
+    // Strip [[ and ]] if present
+    if (field.startsWith('[[') && field.endsWith(']]')) {
+      return field.substring(2, field.length - 2);
+    }
+    return field;
+  }
+
+  /// Parse date string that can be:
+  /// - ISO date format (e.g., "2024-01-01")
+  /// - Relative format with years (e.g., "-3y" = 3 years ago, "+1y" = 1 year from now)
+  /// - Relative format with months (e.g., "-6m" = 6 months ago)
+  /// - Relative format with days (e.g., "-30d" = 30 days ago)
+  /// - "0" = today
+  static DateTime? _parseDate(String dateStr) {
+    if (dateStr.isEmpty) return null;
+
+    // Handle "0" as today
+    if (dateStr == '0') {
+      return DateTime.now();
+    }
+
+    // Check for relative date format (e.g., "-3y", "+1y", "-6m", "-30d")
+    final relativePattern = RegExp(r'^([+-]?\d+)([ymd])$');
+    final match = relativePattern.firstMatch(dateStr);
+
+    if (match != null) {
+      final value = int.tryParse(match.group(1)!);
+      final unit = match.group(2)!;
+
+      if (value != null) {
+        final now = DateTime.now();
+        switch (unit) {
+          case 'y': // years
+            return DateTime(now.year + value, now.month, now.day);
+          case 'm': // months
+            int newMonth = now.month + value;
+            int newYear = now.year;
+            while (newMonth > 12) {
+              newMonth -= 12;
+              newYear++;
+            }
+            while (newMonth < 1) {
+              newMonth += 12;
+              newYear--;
+            }
+            return DateTime(newYear, newMonth, now.day);
+          case 'd': // days
+            return now.add(Duration(days: value));
+        }
+      }
+    }
+
+    // Try parsing as ISO date
+    try {
+      return DateTime.parse(dateStr);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static CalculationConfig? _parseCalculation(XmlElement? node) {
+    if (node == null) return null;
+
+    final type = node.getAttribute('type') ?? 'constant';
+    final value = node.getAttribute('value');
+    final field = _sanitizeField(node.getAttribute('field'));
+    final separator = node.getAttribute('separator');
+    final operator = node.getAttribute('operator');
+    final preserve = node.getAttribute('preserve') == 'true';
+
+    // Parse SQL
+    String? sql;
+    Map<String, String>? sqlParams;
+    if (type == 'query') {
+      sql = node.getElement('sql')?.innerText.trim();
+      final params = <String, String>{};
+      for (final p in node.findElements('parameter')) {
+        final name = p.getAttribute('name');
+        final sourceField = _sanitizeField(p.getAttribute('field'));
+        if (name != null && sourceField != null) {
+          params[name] = sourceField;
+        }
+      }
+      if (params.isNotEmpty) sqlParams = params;
+    }
+
+    // Parse parts (for concat, math)
+    List<CalculationConfig>? parts;
+    if (type == 'concat' || type == 'math') {
+      parts = [];
+      for (final partNode in node.findElements('part')) {
+        final part = _parseCalculation(partNode);
+        if (part != null) parts.add(part);
+      }
+    }
+
+    // Parse cases
+    List<CaseConfig>? cases;
+    CalculationConfig? defaultValue;
+    if (type == 'case') {
+      cases = [];
+      for (final whenNode in node.findElements('when')) {
+        final field = _sanitizeField(whenNode.getAttribute('field'));
+        final op = whenNode.getAttribute('operator') ?? '=';
+        final val = whenNode.getAttribute('value');
+
+        final resultNode = whenNode.getElement('result');
+        final result = _parseCalculation(resultNode);
+
+        if (field != null && val != null && result != null) {
+          cases.add(CaseConfig(
+            field: field,
+            operator: op,
+            value: val,
+            result: result,
+          ));
+        }
+      }
+
+      final elseNode = node.getElement('else');
+      if (elseNode != null) {
+        final resultNode = elseNode.getElement('result');
+        defaultValue = _parseCalculation(resultNode);
+      }
+    }
+
+    return CalculationConfig(
+      type: type,
+      value: value,
+      field: field,
+      sql: sql,
+      sqlParams: sqlParams,
+      separator: separator,
+      operator: operator,
+      parts: parts,
+      cases: cases,
+      defaultValue: defaultValue,
+      preserve: preserve,
+    );
   }
 
   /// Parse skip conditions from preskip or postskip element
@@ -254,5 +430,28 @@ class SurveyLoader {
       if (val is List) return val.join(', ');
       return val.toString();
     });
+  }
+}
+
+QuestionType parseQuestionType(String type) {
+  switch (type.toLowerCase()) {
+    case 'text':
+      return QuestionType.text;
+    case 'checkbox':
+      return QuestionType.checkbox;
+    case 'radio':
+      return QuestionType.radio;
+    case 'information':
+      return QuestionType.information;
+    case 'date':
+      return QuestionType.date;
+    case 'combobox':
+      return QuestionType.combobox;
+    case 'datetime':
+      return QuestionType.datetime;
+    case 'automatic':
+      return QuestionType.automatic;
+    default:
+      return QuestionType.information;
   }
 }

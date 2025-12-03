@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:csv/csv.dart';
+import 'package:flutter/foundation.dart';
 import '../models/question.dart';
 
 class CsvDataService {
@@ -85,12 +86,18 @@ class CsvDataService {
       var filterValue = filter.value;
 
       // Expand placeholders in filter value (e.g., [[region]])
+      final originalFilterValue = filterValue;
       filterValue = _expandPlaceholders(filterValue, answers);
+
+      debugPrint('[CsvDataService] Applying filter: $column ${filter.operator} "$filterValue" (from "$originalFilterValue")');
+      debugPrint('[CsvDataService]   Before filter: ${data.length} rows');
 
       data = data.where((row) {
         final cellValue = row[column] ?? '';
         return _applyOperator(cellValue, filterValue, filter.operator);
       }).toList();
+
+      debugPrint('[CsvDataService]   After filter: ${data.length} rows');
     }
 
     // Extract display and value columns
@@ -129,6 +136,11 @@ class CsvDataService {
         value: config.notInListValue!,
         label: config.notInListLabel!,
       ));
+    }
+
+    debugPrint('[CsvDataService] Returning ${options.length} options from ${config.file}');
+    if (options.isNotEmpty) {
+      debugPrint('[CsvDataService]   Sample: ${options.take(3).map((o) => '${o.value}:${o.label}').join(', ')}${options.length > 3 ? '...' : ''}');
     }
 
     return options;

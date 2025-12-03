@@ -6,37 +6,29 @@ class LogicService {
   /// Evaluates the logic check expression for a given question.
   /// Returns an error message if the expression evaluates to true, otherwise null.
   static String? evaluateLogicChecks(Question question, AnswerMap answers) {
-    final expression = question.logicCheck;
-    if (expression == null || expression.isEmpty) {
+    final logicCheck = question.logicCheck;
+    if (logicCheck == null) {
       return null;
     }
 
     try {
-      // 1. Normalize whitespace (collapse newlines, tabs, multiple spaces into single spaces)
-      final normalizedExpression = expression.replaceAll(RegExp(r'\s+'), ' ').trim();
+      // The condition is already separated in the LogicCheck object
+      final String conditionStr = logicCheck.condition;
+      final String message = logicCheck.message;
 
-      // 2. Parse the main string into expression and message
-      final parts = normalizedExpression.split(';');
-      if (parts.length != 2) {
-        throw FormatException(
-            'Logic check must be in the format "expression; \'message\'"');
-      }
-      final String conditionStr = parts[0].trim();
-      final String message = parts[1].trim().replaceAll("'", "");
-
-      // 2. Evaluate the expression
+      // Evaluate the expression
       final bool result = _evaluateExpression(conditionStr, answers);
 
       debugPrint(
           '[LogicService] Evaluating logic for ${question.fieldName}: "$conditionStr" --> $result');
 
-      // 3. If the expression is true, the check has failed, so return the message
+      // If the expression is true, the check has failed, so return the message
       if (result) {
         return message;
       }
     } catch (e) {
       debugPrint(
-          '[LogicService] Error evaluating expression: "$expression". Error: $e');
+          '[LogicService] Error evaluating expression: "${logicCheck.condition}". Error: $e');
       // Return error message to be visible in UI for debugging
       return 'Error in logic check expression: $e';
     }
@@ -84,6 +76,8 @@ class LogicService {
       condition = condition.substring(1, condition.length - 1).trim();
     }
 
+    debugPrint('[LogicService]   Evaluating single condition: "$condition"');
+
     // Regex to capture: (field_name) (operator) (value)
     // The value can be a quoted string or another field name.
     // Handles operators like =, <>, <=, >=, <, >
@@ -91,13 +85,18 @@ class LogicService {
     final match = regex.firstMatch(condition);
 
     if (match == null) {
+      debugPrint('[LogicService]   ERROR: Failed to parse condition: "$condition"');
       throw FormatException('Invalid condition format: "$condition"');
     }
 
     final String fieldName = match.group(1)!.trim();
-    final String operator =
-        match.group(2)!.trim().replaceAll('!', '<'); // Normalize != to <>
+    String operator = match.group(2)!.trim();
+    // Normalize operators
+    operator = operator.replaceAll('!=', '<>'); // != to <>
+    operator = operator.replaceAll('==', '=');  // == to =
     String valueOrField = match.group(3)!.trim();
+
+    debugPrint('[LogicService]   Parsed: $fieldName $operator $valueOrField');
 
     // Get the actual value of the left-hand side operand from the answers map
     final dynamic leftValue = answers[fieldName];
@@ -105,21 +104,28 @@ class LogicService {
     // Determine the right-hand side value
     dynamic rightValue;
     if (valueOrField.startsWith("'") && valueOrField.endsWith("'")) {
-      // It's a literal string value
+      // It's a literal string value (quoted)
       rightValue = valueOrField.substring(1, valueOrField.length - 1);
+    } else if (int.tryParse(valueOrField) != null || double.tryParse(valueOrField) != null) {
+      // It's a numeric literal (not a field name)
+      rightValue = valueOrField;
     } else {
       // It's a dynamic value from another field
       rightValue = answers[valueOrField];
     }
 
+    debugPrint('[LogicService]   Values: leftValue="$leftValue" (${leftValue.runtimeType}), rightValue="$rightValue" (${rightValue.runtimeType})');
+
     // If either value is null, the condition cannot be met
     if (leftValue == null || rightValue == null) {
       debugPrint(
-          '[LogicService]   - Comparing "$leftValue" vs "$rightValue". One is null, returning false.');
+          '[LogicService]   One value is null, returning false.');
       return false;
     }
 
-    return _compare(leftValue.toString(), rightValue.toString(), operator);
+    final result = _compare(leftValue.toString(), rightValue.toString(), operator);
+    debugPrint('[LogicService]   Result: $result');
+    return result;
   }
 
   /// Performs a comparison between two string values based on the operator.

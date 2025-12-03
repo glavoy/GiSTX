@@ -1,6 +1,7 @@
 import '../models/question.dart';
 import '../config/app_config.dart';
 import 'package:uuid/uuid.dart';
+import 'db_service.dart';
 
 /// This is the ONLY file a programmer edits for automatic variables.
 /// Add/edit entries in [_registry] to support new automatic fields.
@@ -38,8 +39,8 @@ class AutoFields {
   /// Public entry point: returns existing answer if present,
   /// otherwise computes once and stores it in `answers`.
   /// In edit mode, preserves certain fields like uniqueid, starttime, stoptime
-  static String compute(AnswerMap answers, Question q,
-      {bool isEditMode = false, String? surveyId}) {
+  static Future<String> compute(AnswerMap answers, Question q,
+      {bool isEditMode = false, String? surveyId}) async {
     final key = q.fieldName;
     final existing = answers[key];
 
@@ -63,6 +64,21 @@ class AutoFields {
       return existing;
     }
 
+    // Check for XML configuration
+    if (q.calculation != null) {
+      // Check preserve flag
+      if (isEditMode &&
+          q.calculation!.preserve &&
+          existing is String &&
+          existing.isNotEmpty) {
+        return existing;
+      }
+
+      final val = await _executeCalculation(q.calculation!, answers, surveyId);
+      answers[key] = val;
+      return val;
+    }
+
     final fn = _registry[key];
     if (fn == null) {
       // Fallback if no handler defined for this field
@@ -74,6 +90,172 @@ class AutoFields {
     final value = fn(answers, q, isEditMode, surveyId);
     answers[key] = value;
     return value;
+  }
+
+  static String? _sanitizeField(String? field) {
+    if (field == null) return null;
+    // Strip [[ and ]] if present
+    if (field.startsWith('[[') && field.endsWith(']]')) {
+      return field.substring(2, field.length - 2);
+    }
+    return field;
+  }
+
+  static Future<String> _executeCalculation(
+      CalculationConfig config, AnswerMap answers, String? surveyId) async {
+    try {
+      switch (config.type) {
+        case 'constant':
+          if (config.value == 'NOW_YEAR') return DateTime.now().year.toString();
+          if (config.value == 'NOW') return DateTime.now().toIso8601String();
+          return config.value ?? '';
+
+        case 'lookup':
+          final field = _sanitizeField(config.field);
+          if (field != null) {
+            return answers[field]?.toString() ?? '';
+          }
+          return '';
+
+        case 'query':
+          if (surveyId == null || config.sql == null) return '';
+          try {
+            final db = await DbService.getDatabaseForQueries(surveyId);
+
+            // Prepare parameters
+            final List<dynamic> args = [];
+            String sql = config.sql!;
+            final params = config.sqlParams ?? {};
+
+            final paramRegex = RegExp(r'@\w+');
+            final matches = paramRegex.allMatches(sql).toList();
+
+            for (final match in matches) {
+              final paramName = match.group(0)!;
+              final rawFieldName = params[paramName];
+              final fieldName = _sanitizeField(rawFieldName);
+
+              final val = fieldName != null
+                  ? (answers[fieldName]?.toString() ?? '')
+                  : '';
+              args.add(val);
+            }
+
+            // Replace all @param with ?
+            sql = sql.replaceAll(paramRegex, '?');
+
+            final results = await db.rawQuery(sql, args);
+            if (results.isNotEmpty && results.first.values.isNotEmpty) {
+              return results.first.values.first?.toString() ?? '';
+            }
+            return '';
+          } catch (e) {
+            print('Error executing auto field query: $e');
+            return '';
+          }
+
+        case 'concat':
+          if (config.parts == null) return '';
+          final buffer = StringBuffer();
+          for (int i = 0; i < config.parts!.length; i++) {
+            if (i > 0 && config.separator != null) {
+              buffer.write(config.separator);
+            }
+            buffer.write(
+                await _executeCalculation(config.parts![i], answers, surveyId));
+          }
+          return buffer.toString();
+
+        case 'math':
+          if (config.parts == null || config.parts!.isEmpty) return '';
+          double result = 0;
+
+          // Evaluate first part
+          final firstVal = double.tryParse(await _executeCalculation(
+                  config.parts![0], answers, surveyId)) ??
+              0;
+          result = firstVal;
+
+          // Apply subsequent parts
+          for (int i = 1; i < config.parts!.length; i++) {
+            final val = double.tryParse(await _executeCalculation(
+                    config.parts![i], answers, surveyId)) ??
+                0;
+            switch (config.operator) {
+              case '+':
+                result += val;
+                break;
+              case '-':
+                result -= val;
+                break;
+              case '*':
+                result *= val;
+                break;
+              case '/':
+                if (val != 0) result /= val;
+                break;
+            }
+          }
+          // Return as integer if it's a whole number, else double
+          if (result == result.roundToDouble()) {
+            return result.toInt().toString();
+          }
+          return result.toString();
+
+        case 'case':
+          if (config.cases != null) {
+            for (final c in config.cases!) {
+              final field = _sanitizeField(c.field);
+              final val = answers[field]?.toString() ?? '';
+              bool match = false;
+
+              switch (c.operator) {
+                case '=':
+                  match = val == c.value;
+                  break;
+                case '!=':
+                  match = val != c.value;
+                  break;
+                case '>':
+                  final v1 = double.tryParse(val);
+                  final v2 = double.tryParse(c.value);
+                  if (v1 != null && v2 != null) match = v1 > v2;
+                  break;
+                case '<':
+                  final v1 = double.tryParse(val);
+                  final v2 = double.tryParse(c.value);
+                  if (v1 != null && v2 != null) match = v1 < v2;
+                  break;
+                case '>=':
+                  final v1 = double.tryParse(val);
+                  final v2 = double.tryParse(c.value);
+                  if (v1 != null && v2 != null) match = v1 >= v2;
+                  break;
+                case '<=':
+                  final v1 = double.tryParse(val);
+                  final v2 = double.tryParse(c.value);
+                  if (v1 != null && v2 != null) match = v1 <= v2;
+                  break;
+              }
+
+              if (match) {
+                return await _executeCalculation(c.result, answers, surveyId);
+              }
+            }
+          }
+          if (config.defaultValue != null) {
+            return await _executeCalculation(
+                config.defaultValue!, answers, surveyId);
+          }
+          return '';
+
+        default:
+          return '';
+      }
+    } catch (e) {
+      print('Error executing calculation: $e');
+      return '';
+    }
   }
 
   static String _computeStartTime(

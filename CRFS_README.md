@@ -110,9 +110,11 @@ These fields control how the app automatically launches child surveys based on a
     *   `1`: **Prompt**. After saving the parent form, asks the user: "Do you want to start entering records for [Child Form]?"
     *   `2`: **Force**. Immediately launches the child form loop after saving the parent form.
 
-*   **`repeat_enforce_count`**: (Boolean/Int)
-    *   If set to `1` (true): The app ensures the user creates exactly the number of records specified in `repeat_count_field`.
-    *   *Note: Implementation details may vary, but generally used to validate the loop completion.*
+*   **`repeat_enforce_count`**: Controls how strictly the app enforces the record count.
+    *   `0`: **Flexible**. No enforcement. The user can enter fewer or more records than specified.
+    *   `1`: **Warn** (Default). If the count doesn't match, the app warns the user and offers to update the parent record's count field.
+    *   `2`: **Force**. Strict enforcement. The app prevents the user from exiting the loop until the exact number of records are created.
+    *   `3`: **Auto-Sync**. Silent enforcement. The app automatically updates the parent record's count field to match the actual number of records entered.
 
 ### Example Workflow
 **Scenario**: Household Survey (`household`) asks "How many members?" (`mem_count`). We want to automatically start the Member Form (`members`).

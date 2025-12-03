@@ -25,7 +25,8 @@ class SurveyScreen extends StatefulWidget {
       incrementField; // Field to auto-increment (e.g., 'linenum', 'netnum')
   final int? repeatIndex; // Current iteration (e.g., 2)
   final int? repeatTotal; // Total iterations (e.g., 5)
-  final String? repeatEntityName; // Entity name for repeat surveys (e.g., "Member", "Structure", "Net")
+  final String?
+      repeatEntityName; // Entity name for repeat surveys (e.g., "Member", "Structure", "Net")
 
   const SurveyScreen({
     super.key,
@@ -611,7 +612,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
       _logicError = null; // Clear error on navigation
 
       // Re-evaluate logic checks for the question we're returning to
-      if (_loadedQuestions != null && _currentQuestion < _loadedQuestions!.length) {
+      if (_loadedQuestions != null &&
+          _currentQuestion < _loadedQuestions!.length) {
         final question = _loadedQuestions![_currentQuestion];
         _logicError = LogicService.evaluateLogicChecks(question, _answers);
       }
@@ -636,6 +638,15 @@ class _SurveyScreenState extends State<SurveyScreen> {
       case QuestionType.combobox:
         return val != null && val.toString().isNotEmpty;
       case QuestionType.date:
+        // For date questions, must have a date selected or special response
+        if (val == null) return false;
+        final valStr = val.toString();
+        if (valStr.isEmpty) return false;
+        // Special responses (don't know, refuse) are valid
+        if (q.dontKnow != null && valStr == q.dontKnow) return true;
+        if (q.refuse != null && valStr == q.refuse) return true;
+        // Otherwise, must be a valid DateTime
+        return val is DateTime || (val is String && DateTime.tryParse(valStr) != null);
       case QuestionType.datetime:
         return val != null && val.toString().isNotEmpty;
       case QuestionType.information:
@@ -716,12 +727,11 @@ class _SurveyScreenState extends State<SurveyScreen> {
       _answers[q.fieldName] = '-9';
     } else {
       // Regular automatic field (starttime, uniqueid, etc.)
-      // For these, only compute if not already present
       if (_answers[q.fieldName] != null) {
         return; // Already computed
       }
 
-      final value = AutoFields.compute(
+      final value = await AutoFields.compute(
         _answers,
         q,
         isEditMode: widget.uniqueId != null,
@@ -731,39 +741,36 @@ class _SurveyScreenState extends State<SurveyScreen> {
     }
   }
 
-  /// Skip to the first question that should be displayed (on initial load)
-  /// Skips automatic questions and primary key questions in edit mode
+  /// Skip to the first question that should be displayed
   Future<void> _skipToFirstDisplayedQuestion(List<Question> questions) async {
-    if (_currentQuestion == 0) {
-      int index = 0;
+    int index = 0;
 
-      // Find the first displayable question
-      while (index < questions.length) {
-        final q = questions[index];
+    // Find the first displayable question
+    while (index < questions.length) {
+      final q = questions[index];
 
-        // Process and skip automatic questions
-        if (q.type == QuestionType.automatic) {
-          await _processAutomaticQuestion(q);
-          index++;
-          continue;
-        }
-
-        // Skip primary key questions in edit mode
-        if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) {
-          debugPrint('Skipping primary key question on load: ${q.fieldName}');
-          index++;
-          continue;
-        }
-
-        // Found a displayable question
-        break;
+      // Process and skip automatic questions
+      if (q.type == QuestionType.automatic) {
+        await _processAutomaticQuestion(q);
+        index++;
+        continue;
       }
 
-      if (index < questions.length && index != _currentQuestion) {
-        setState(() {
-          _currentQuestion = index;
-        });
+      // Skip primary key questions in edit mode
+      if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) {
+        debugPrint('Skipping primary key question on load: ${q.fieldName}');
+        index++;
+        continue;
       }
+
+      // Found a displayable question
+      break;
+    }
+
+    if (index < questions.length && index != _currentQuestion) {
+      setState(() {
+        _currentQuestion = index;
+      });
     }
   }
 
@@ -1298,15 +1305,17 @@ class _SurveyScreenState extends State<SurveyScreen> {
         // User exited without saving
         // Check if we should enforce count
         if (enforceCountMode == 2) {
-          // Force mode - must complete
-          final shouldContinue =
-              await _showMustCompleteDialog(context, repeatCount, i);
-          if (shouldContinue) {
-            i--; // Retry this iteration
-            continue;
-          } else {
-            break; // User insisted on exiting
-          }
+          // Force mode - must complete (no exit option)
+          await _showMustCompleteDialogWithEntity(
+            context,
+            repeatCount,
+            i,
+            entityName,
+            allowExit: false, // Force mode: user cannot exit
+          );
+          // In force mode, dialog will always return true (user can only click Continue)
+          i--; // Retry this iteration
+          continue;
         } else {
           // User can exit, but we'll check count at the end
           break;
@@ -1332,13 +1341,11 @@ class _SurveyScreenState extends State<SurveyScreen> {
     );
   }
 
-  /// Show dialog when user must complete all members
-  Future<bool> _showMustCompleteDialog(
-      BuildContext context, int total, int current) async {
-    final entityName = widget.repeatEntityName ?? 'member';
-    final entityNamePlural = widget.repeatEntityName != null
-        ? '${widget.repeatEntityName}s'
-        : 'members';
+  /// Show dialog when user must complete all entities
+  /// When enforceCountMode is 2 (Force), user cannot exit
+  Future<bool> _showMustCompleteDialogWithEntity(
+      BuildContext context, int total, int current, String entityName, {bool allowExit = true}) async {
+    final entityNamePlural = entityName.endsWith('s') ? entityName : '${entityName}s';
 
     final result = await showDialog<bool>(
       context: context,
@@ -1348,11 +1355,12 @@ class _SurveyScreenState extends State<SurveyScreen> {
         content: Text(
             'You must add all $total $entityNamePlural.\n\nCurrently on ${entityName.toLowerCase()} $current of $total.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Exit Anyway'),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-          ),
+          if (allowExit)
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Exit Anyway'),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+            ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Continue'),
