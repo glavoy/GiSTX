@@ -43,6 +43,8 @@ class _QuestionViewState extends State<QuestionView> {
   DateTime? _selectedDateTime;
   String? _textError;
   List<QuestionOption> _dynamicOptions = [];
+  final ScrollController _radioScrollController = ScrollController();
+  final ScrollController _checkboxScrollController = ScrollController();
 
   @override
   void initState() {
@@ -61,17 +63,15 @@ class _QuestionViewState extends State<QuestionView> {
       if (existing is List) ...existing.map((e) => e.toString()),
     };
 
-    // Debug checkbox initialization
-    if (q.type == QuestionType.checkbox) {
-      debugPrint('Initializing checkbox ${q.fieldName}');
-      debugPrint('  existing value from answers[${q.fieldName}]: $existing (type: ${existing.runtimeType})');
-      debugPrint('  is List? ${existing is List}');
-      debugPrint('  _checkboxSelection after init: $_checkboxSelection');
-      debugPrint('  Available options: ${q.options.map((o) => o.value).toList()}');
-    }
+    // Convert existing value to string for radio/combobox
+    // This ensures consistency with option values from CSV/database
+    _radioSelection = existing != null ? existing.toString() : null;
+    _comboboxSelection = existing != null ? existing.toString() : null;
 
-    _radioSelection = (existing is String) ? existing : null;
-    _comboboxSelection = (existing is String) ? existing : null;
+    debugPrint('[QuestionView] Initializing ${q.fieldName}: existing=$existing (type: ${existing.runtimeType}), _radioSelection=$_radioSelection, _comboboxSelection=$_comboboxSelection');
+    if (q.responseConfig != null) {
+      debugPrint('[QuestionView]   Has dynamic responses: source=${q.responseConfig!.source}');
+    }
 
     // Handle date/datetime initialization
     if (existing is DateTime) {
@@ -90,18 +90,15 @@ class _QuestionViewState extends State<QuestionView> {
           // Not a valid date string
         }
       }
-      // If it is a special response, leave _selectedDate null and keep the string value
     }
 
     // Centralized automatic variable calculation
-    if (q.type == QuestionType.automatic && existing == null) {
-      final v = AutoFields.compute(widget.answers, q, isEditMode: widget.isEditMode);
-      widget.answers[q.fieldName] = v;
-    }
-    // Also handle datetime type automatic fields
-    if (q.type == QuestionType.datetime && existing == null) {
-      final v = AutoFields.compute(widget.answers, q, isEditMode: widget.isEditMode);
-      widget.answers[q.fieldName] = v;
+    // Only compute automatic fields, NOT date/datetime fields
+    // Date/datetime fields should require explicit user selection
+    if (q.type == QuestionType.automatic) {
+      if (existing == null) {
+        _computeAutoValue();
+      }
     }
 
     // Autofocus text input on initial load when applicable
@@ -117,6 +114,32 @@ class _QuestionViewState extends State<QuestionView> {
     }
   }
 
+  Future<void> _computeAutoValue() async {
+    final val = await AutoFields.compute(widget.answers, widget.question,
+        isEditMode: widget.isEditMode, surveyId: widget.surveyId);
+    if (mounted) {
+      setState(() {
+        if (widget.question.type == QuestionType.automatic) {
+          // For automatic, just update answers
+        } else if (widget.question.type == QuestionType.datetime) {
+          _selectedDateTime = DateTime.tryParse(val);
+        } else if (widget.question.type == QuestionType.date) {
+          try {
+            _selectedDate = DateTime.parse(val);
+          } catch (_) {}
+        }
+        // Update controller for text-based auto fields if any
+        if (widget.question.type == QuestionType.text) {
+          _textController.text = val;
+        }
+
+        // Always update the answers map
+        widget.answers[widget.question.fieldName] = val;
+      });
+      widget.onAnswerChanged?.call();
+    }
+  }
+
   Future<void> _loadDynamicOptions() async {
     final config = widget.question.responseConfig;
     if (config == null) return;
@@ -125,7 +148,8 @@ class _QuestionViewState extends State<QuestionView> {
       List<QuestionOption> options = [];
 
       if (config.source == ResponseSource.csv) {
-        options = await widget.csvDataService.getResponseOptions(config, widget.answers);
+        options = await widget.csvDataService
+            .getResponseOptions(config, widget.answers);
       } else if (config.source == ResponseSource.database) {
         options = await DatabaseResponseService.getResponseOptions(
           widget.surveyId,
@@ -138,6 +162,15 @@ class _QuestionViewState extends State<QuestionView> {
         setState(() {
           _dynamicOptions = options;
         });
+        debugPrint('[QuestionView] Loaded ${options.length} dynamic options for ${widget.question.fieldName}');
+        debugPrint('[QuestionView]   Current _radioSelection: $_radioSelection');
+        debugPrint('[QuestionView]   Options: ${options.map((o) => '${o.value}:${o.label}').take(5).join(', ')}${options.length > 5 ? '...' : ''}');
+
+        // Check if current selection exists in options
+        if (_radioSelection != null) {
+          final matchFound = options.any((opt) => opt.value == _radioSelection);
+          debugPrint('[QuestionView]   Selection "$_radioSelection" ${matchFound ? "FOUND" : "NOT FOUND"} in options');
+        }
       }
     } catch (e) {
       debugPrint('Error loading dynamic options: $e');
@@ -158,8 +191,9 @@ class _QuestionViewState extends State<QuestionView> {
       // Reset text field
       _textController.text = (existing is String) ? existing : '';
       // Reset radio/checkbox/combobox selections
-      _radioSelection = (existing is String) ? existing : null;
-      _comboboxSelection = (existing is String) ? existing : null;
+      // Convert to string to ensure consistency with option values
+      _radioSelection = existing != null ? existing.toString() : null;
+      _comboboxSelection = existing != null ? existing.toString() : null;
       _checkboxSelection = {
         if (existing is List) ...existing.map((e) => e.toString()),
       };
@@ -196,6 +230,8 @@ class _QuestionViewState extends State<QuestionView> {
   void dispose() {
     _textFocusNode.dispose();
     _textController.dispose();
+    _radioScrollController.dispose();
+    _checkboxScrollController.dispose();
     super.dispose();
   }
 
@@ -265,7 +301,9 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
+        if ((q.text ?? '').isNotEmpty)
+          _buildSectionTitle(
+              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         TextField(
           controller: _textController,
           focusNode: _textFocusNode,
@@ -299,12 +337,23 @@ class _QuestionViewState extends State<QuestionView> {
     // Use dynamic options if available, otherwise use static options
     final options = _dynamicOptions.isNotEmpty ? _dynamicOptions : q.options;
 
+    debugPrint('[QuestionView] Building radio for ${q.fieldName}: _radioSelection=$_radioSelection, options.length=${options.length}, _dynamicOptions.length=${_dynamicOptions.length}');
+    if (_radioSelection != null && options.isNotEmpty) {
+      final match = options.firstWhere(
+        (opt) => opt.value == _radioSelection,
+        orElse: () => QuestionOption(value: '', label: ''),
+      );
+      debugPrint('[QuestionView]   Selection match: ${match.value.isEmpty ? "NOT FOUND" : "FOUND (${match.label})"}');
+    }
+
     // Show empty message if no options and config has empty message
     if (options.isEmpty && q.responseConfig?.emptyMessage != null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
+          if ((q.text ?? '').isNotEmpty)
+            _buildSectionTitle(
+                SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
@@ -319,34 +368,56 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
+        if ((q.text ?? '').isNotEmpty)
+          _buildSectionTitle(
+              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         if (widget.logicError != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: Text(
               widget.logicError!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.error, fontSize: 12),
             ),
           ),
-        ...options.map(
-          (opt) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: RadioGroup<String>(
-              groupValue: _radioSelection,
-              onChanged: (val) {
-                setState(() {
-                  _radioSelection = val;
-                  widget.answers[q.fieldName] = val;
-                });
-                widget.onAnswerChanged?.call();
-              },
-              child: RadioListTile<String>(
-                value: opt.value,
-                title: Text(opt.label),
-                dense: true,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                tileColor: Colors.white,
+        // Wrap radio buttons in scrollbar with max height
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.5, // Max 50% of screen
+          ),
+          child: Scrollbar(
+            controller: _radioScrollController,
+            thumbVisibility: options.length > 5, // Show scrollbar if more than 5 options
+            child: SingleChildScrollView(
+              controller: _radioScrollController,
+              child: RadioGroup<String>(
+                groupValue: _radioSelection,
+                onChanged: (val) {
+                  setState(() {
+                    _radioSelection = val;
+                    widget.answers[q.fieldName] = val;
+                  });
+                  widget.onAnswerChanged?.call();
+                },
+                child: Column(
+                  children: options
+                      .map(
+                        (opt) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: AppRadioTheme(
+                            child: RadioListTile<String>(
+                              value: opt.value,
+                              title: Text(opt.label),
+                              dense: true,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              tileColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
               ),
             ),
           ),
@@ -357,7 +428,8 @@ class _QuestionViewState extends State<QuestionView> {
 
   Widget _buildCheckbox(Question q) {
     // Debug: Log checkbox state
-    debugPrint('Building checkbox ${q.fieldName}, selection: $_checkboxSelection');
+    debugPrint(
+        'Building checkbox ${q.fieldName}, selection: $_checkboxSelection');
 
     // Use dynamic options if available, otherwise use static options
     final options = _dynamicOptions.isNotEmpty ? _dynamicOptions : q.options;
@@ -367,7 +439,9 @@ class _QuestionViewState extends State<QuestionView> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
+          if ((q.text ?? '').isNotEmpty)
+            _buildSectionTitle(
+                SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
@@ -387,60 +461,79 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
+        if ((q.text ?? '').isNotEmpty)
+          _buildSectionTitle(
+              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         if (widget.logicError != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: Text(
               widget.logicError!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.error, fontSize: 12),
             ),
           ),
-        Wrap(
-          runSpacing: 8,
-          children: options.map((opt) {
-            final checked = _checkboxSelection.contains(opt.value);
-            debugPrint('  Option ${opt.value} (${opt.label}): checked=$checked');
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: CheckboxListTile(
-                value: checked,
-                dense: true,
-                title: Text(opt.label),
-                controlAffinity: ListTileControlAffinity.leading,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                tileColor: Colors.white,
-                onChanged: (val) {
-                  setState(() {
-                    // Check if this is a special option (don't know, refuse, not in list)
-                    final isSpecial = opt.value == dontKnowValue ||
-                                     opt.value == refuseValue ||
-                                     opt.value == notInListValue;
+        // Wrap checkbox options in scrollbar with max height
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.5, // Max 50% of screen
+          ),
+          child: Scrollbar(
+            controller: _checkboxScrollController,
+            thumbVisibility: options.length > 5, // Show scrollbar if more than 5 options
+            child: SingleChildScrollView(
+              controller: _checkboxScrollController,
+              child: Column(
+                children: options.map((opt) {
+                  final checked = _checkboxSelection.contains(opt.value);
+                  debugPrint(
+                      '  Option ${opt.value} (${opt.label}): checked=$checked');
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: CheckboxListTile(
+                      value: checked,
+                      dense: true,
+                      title: Text(opt.label),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      tileColor: Colors.white,
+                      onChanged: (val) {
+                        setState(() {
+                          // Check if this is a special option (don't know, refuse, not in list)
+                          final isSpecial = opt.value == dontKnowValue ||
+                              opt.value == refuseValue ||
+                              opt.value == notInListValue;
 
-                    if (val == true) {
-                      if (isSpecial) {
-                        // If selecting a special option, clear everything else
-                        _checkboxSelection.clear();
-                        _checkboxSelection.add(opt.value);
-                      } else {
-                        // If selecting a normal option, remove any special options
-                        if (dontKnowValue != null) _checkboxSelection.remove(dontKnowValue);
-                        if (refuseValue != null) _checkboxSelection.remove(refuseValue);
-                        if (notInListValue != null) _checkboxSelection.remove(notInListValue);
-                        _checkboxSelection.add(opt.value);
-                      }
-                    } else {
-                      // Deselecting is always allowed
-                      _checkboxSelection.remove(opt.value);
-                    }
-                    widget.answers[q.fieldName] = _checkboxSelection.toList();
-                  });
-                  widget.onAnswerChanged?.call();
-                },
+                          if (val == true) {
+                            if (isSpecial) {
+                              // If selecting a special option, clear everything else
+                              _checkboxSelection.clear();
+                              _checkboxSelection.add(opt.value);
+                            } else {
+                              // If selecting a normal option, remove any special options
+                              if (dontKnowValue != null)
+                                _checkboxSelection.remove(dontKnowValue);
+                              if (refuseValue != null)
+                                _checkboxSelection.remove(refuseValue);
+                              if (notInListValue != null)
+                                _checkboxSelection.remove(notInListValue);
+                              _checkboxSelection.add(opt.value);
+                            }
+                          } else {
+                            // Deselecting is always allowed
+                            _checkboxSelection.remove(opt.value);
+                          }
+                          widget.answers[q.fieldName] = _checkboxSelection.toList();
+                        });
+                        widget.onAnswerChanged?.call();
+                      },
+                    ),
+                  );
+                }).toList(),
               ),
-            );
-          }).toList(),
+            ),
+          ),
         ),
       ],
     );
@@ -455,7 +548,9 @@ class _QuestionViewState extends State<QuestionView> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
+          if ((q.text ?? '').isNotEmpty)
+            _buildSectionTitle(
+                SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
@@ -470,13 +565,16 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
+        if ((q.text ?? '').isNotEmpty)
+          _buildSectionTitle(
+              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         if (widget.logicError != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0, left: 12.0),
             child: Text(
               widget.logicError!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.error, fontSize: 12),
             ),
           ),
         Container(
@@ -513,30 +611,36 @@ class _QuestionViewState extends State<QuestionView> {
     // Check if current answer is a special response
     final currentAnswer = widget.answers[q.fieldName]?.toString();
     // Only match special response if answer exists and is non-empty, and special response is defined
-    final isDontKnow = currentAnswer != null && currentAnswer.isNotEmpty &&
-                       q.dontKnow != null && currentAnswer == q.dontKnow;
-    final isRefuse = currentAnswer != null && currentAnswer.isNotEmpty &&
-                     q.refuse != null && currentAnswer == q.refuse;
+    final isDontKnow = currentAnswer != null &&
+        currentAnswer.isNotEmpty &&
+        q.dontKnow != null &&
+        currentAnswer == q.dontKnow;
+    final isRefuse = currentAnswer != null &&
+        currentAnswer.isNotEmpty &&
+        q.refuse != null &&
+        currentAnswer == q.refuse;
     final hasSpecialResponse = isDontKnow || isRefuse;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
+        if ((q.text ?? '').isNotEmpty)
+          _buildSectionTitle(
+              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         InkWell(
           onTap: () async {
             // Calculate date limits
             DateTime firstDate = DateTime(1900);
             DateTime lastDate = DateTime(2100);
 
+            // Fix: parse string to DateTime for minDate/maxDate
             if (q.minDate != null) {
-              final calculated = _calculateDate(q.minDate!);
-              if (calculated != null) firstDate = calculated;
+              // q.minDate is already DateTime? in our model
+              firstDate = q.minDate!;
             }
-            
+
             if (q.maxDate != null) {
-              final calculated = _calculateDate(q.maxDate!);
-              if (calculated != null) lastDate = calculated;
+              lastDate = q.maxDate!;
             }
 
             // Ensure initial date is within range
@@ -554,7 +658,8 @@ class _QuestionViewState extends State<QuestionView> {
               setState(() {
                 _selectedDate = picked;
                 // For 'date' type, store as 'YYYY-MM-DD' string
-                widget.answers[q.fieldName] = picked.toIso8601String().split('T')[0];
+                widget.answers[q.fieldName] =
+                    picked.toIso8601String().split('T')[0];
               });
               widget.onAnswerChanged?.call();
             }
@@ -580,7 +685,9 @@ class _QuestionViewState extends State<QuestionView> {
                     color: hasSpecialResponse
                         ? Colors.orange.shade700
                         : (_selectedDate != null ? Colors.black : Colors.grey),
-                    fontWeight: hasSpecialResponse ? FontWeight.w500 : FontWeight.normal,
+                    fontWeight: hasSpecialResponse
+                        ? FontWeight.w500
+                        : FontWeight.normal,
                   ),
                 ),
                 Icon(Icons.calendar_today, color: Colors.grey.shade600),
@@ -606,9 +713,12 @@ class _QuestionViewState extends State<QuestionView> {
                       },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        backgroundColor: isDontKnow ? Colors.orange.shade50 : null,
+                        backgroundColor:
+                            isDontKnow ? Colors.orange.shade50 : null,
                         side: BorderSide(
-                          color: isDontKnow ? Colors.orange.shade700 : Colors.grey.shade400,
+                          color: isDontKnow
+                              ? Colors.orange.shade700
+                              : Colors.grey.shade400,
                           width: isDontKnow ? 2 : 1,
                         ),
                         shape: RoundedRectangleBorder(
@@ -618,13 +728,17 @@ class _QuestionViewState extends State<QuestionView> {
                       child: Text(
                         "Don't know",
                         style: TextStyle(
-                          color: isDontKnow ? Colors.orange.shade700 : Colors.grey.shade700,
-                          fontWeight: isDontKnow ? FontWeight.w600 : FontWeight.normal,
+                          color: isDontKnow
+                              ? Colors.orange.shade700
+                              : Colors.grey.shade700,
+                          fontWeight:
+                              isDontKnow ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
                     ),
                   ),
-                if (q.dontKnow != null && q.refuse != null) const SizedBox(width: 12),
+                if (q.dontKnow != null && q.refuse != null)
+                  const SizedBox(width: 12),
                 if (q.refuse != null)
                   Expanded(
                     child: OutlinedButton(
@@ -637,9 +751,12 @@ class _QuestionViewState extends State<QuestionView> {
                       },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        backgroundColor: isRefuse ? Colors.orange.shade50 : null,
+                        backgroundColor:
+                            isRefuse ? Colors.orange.shade50 : null,
                         side: BorderSide(
-                          color: isRefuse ? Colors.orange.shade700 : Colors.grey.shade400,
+                          color: isRefuse
+                              ? Colors.orange.shade700
+                              : Colors.grey.shade400,
                           width: isRefuse ? 2 : 1,
                         ),
                         shape: RoundedRectangleBorder(
@@ -649,8 +766,11 @@ class _QuestionViewState extends State<QuestionView> {
                       child: Text(
                         'Refuse',
                         style: TextStyle(
-                          color: isRefuse ? Colors.orange.shade700 : Colors.grey.shade700,
-                          fontWeight: isRefuse ? FontWeight.w600 : FontWeight.normal,
+                          color: isRefuse
+                              ? Colors.orange.shade700
+                              : Colors.grey.shade700,
+                          fontWeight:
+                              isRefuse ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
                     ),
@@ -666,7 +786,9 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
+        if ((q.text ?? '').isNotEmpty)
+          _buildSectionTitle(
+              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         InkWell(
           onTap: () async {
             final pickedDate = await showDatePicker(
@@ -726,41 +848,6 @@ class _QuestionViewState extends State<QuestionView> {
     );
   }
 
-  /// Calculate a date from a relative string like "-1y", "+30d"
-  DateTime? _calculateDate(String offset) {
-    if (offset.isEmpty) return null;
-    
-    final now = DateTime.now();
-    // Remove any whitespace
-    final clean = offset.trim();
-    
-    if (clean.length < 3) return null; // Need at least sign, number, unit
-    
-    final sign = clean.substring(0, 1);
-    final unit = clean.substring(clean.length - 1).toLowerCase();
-    final numberStr = clean.substring(1, clean.length - 1);
-    final number = int.tryParse(numberStr);
-    
-    if (number == null) return null;
-    
-    final multiplier = sign == '-' ? -1 : 1;
-    final amount = number * multiplier;
-    
-    switch (unit) {
-      case 'd':
-        return now.add(Duration(days: amount));
-      case 'w':
-        return now.add(Duration(days: amount * 7));
-      case 'm':
-        // Approximate month calculation
-        return DateTime(now.year, now.month + amount, now.day);
-      case 'y':
-        return DateTime(now.year + amount, now.month, now.day);
-      default:
-        return null;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final q = widget.question;
@@ -771,7 +858,8 @@ class _QuestionViewState extends State<QuestionView> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionTitle(SurveyLoader.expandPlaceholders(q.text ?? 'Automatic: ${q.fieldName}', widget.answers)),
+            _buildSectionTitle(SurveyLoader.expandPlaceholders(
+                q.text ?? 'Automatic: ${q.fieldName}', widget.answers)),
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -799,5 +887,33 @@ class _QuestionViewState extends State<QuestionView> {
       case QuestionType.datetime:
         return _buildDateTime(q);
     }
+  }
+}
+
+// Helper widget for RadioGroup if needed, or just use standard Column
+// Helper widget for RadioTheme if needed
+class AppRadioTheme extends StatelessWidget {
+  final Widget child;
+
+  const AppRadioTheme({
+    super.key,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        radioTheme: RadioThemeData(
+          fillColor: WidgetStateProperty.resolveWith<Color>((states) {
+            if (states.contains(WidgetState.selected)) {
+              return Theme.of(context).primaryColor;
+            }
+            return Colors.grey.shade600;
+          }),
+        ),
+      ),
+      child: child,
+    );
   }
 }

@@ -1,4 +1,16 @@
-enum QuestionType { automatic, text, checkbox, radio, information, date, combobox, datetime }
+/// Type alias for the map of answers
+typedef AnswerMap = Map<String, dynamic>;
+
+enum QuestionType {
+  automatic,
+  text,
+  checkbox,
+  radio,
+  information,
+  date,
+  combobox,
+  datetime
+}
 
 enum ResponseSource { static_, csv, database }
 
@@ -22,15 +34,15 @@ class ResponseFilter {
 
 class ResponseConfig {
   final ResponseSource source;
-  final String? file;  // For CSV source
-  final String? table;  // For database source
+  final String? file; // For CSV source
+  final String? table; // For database source
   final List<ResponseFilter> filters;
   final String? displayColumn;
   final String? valueColumn;
   final bool distinct;
   final String? emptyMessage;
-  final String? dontKnowValue;  // Optional: Value for "Don't know" option
-  final String? dontKnowLabel;  // Optional: Label for "Don't know" option
+  final String? dontKnowValue; // Optional: Value for "Don't know" option
+  final String? dontKnowLabel; // Optional: Label for "Don't know" option
   final String? notInListValue; // Optional: Value for "Not in this list" option
   final String? notInListLabel; // Optional: Label for "Not in this list" option
 
@@ -41,7 +53,7 @@ class ResponseConfig {
     this.filters = const [],
     this.displayColumn,
     this.valueColumn,
-    this.distinct = true,  // Default to true - almost always want unique values
+    this.distinct = true, // Default to true - almost always want unique values
     this.emptyMessage,
     this.dontKnowValue,
     this.dontKnowLabel,
@@ -56,16 +68,17 @@ class NumericCheck {
   final String? otherValues; // comma-separated string of allowed exceptions
   final String? message;
 
-  const NumericCheck({this.minValue, this.maxValue, this.otherValues, this.message});
+  const NumericCheck(
+      {this.minValue, this.maxValue, this.otherValues, this.message});
 }
 
 /// Skip condition for navigating between questions
 class SkipCondition {
-  final String fieldName;        // Field to check (e.g., 'sex')
-  final String condition;        // Comparison operator (e.g., '=', '<>', '<', '>')
-  final String response;         // Value to compare against (e.g., '1')
-  final String responseType;     // 'fixed' or 'dynamic'
-  final String skipToFieldName;  // Target field to skip to (e.g., 'village')
+  final String fieldName; // Field to check (e.g., 'sex')
+  final String condition; // Comparison operator (e.g., '=', '<>', '<', '>')
+  final String response; // Value to compare against (e.g., '1')
+  final String responseType; // 'fixed' or 'dynamic'
+  final String skipToFieldName; // Target field to skip to (e.g., 'village')
 
   SkipCondition({
     required this.fieldName,
@@ -82,6 +95,55 @@ class UniqueCheck {
   UniqueCheck({this.message});
 }
 
+class LogicCheck {
+  final String message;
+  final String condition; // e.g., "age > 18"
+
+  LogicCheck({required this.message, required this.condition});
+}
+
+class CalculationConfig {
+  final String type; // constant, lookup, query, concat, math, case
+  final String? value; // for constant, case value
+  final String? field; // for lookup, case field
+  final String? sql; // for query
+  final Map<String, String>? sqlParams; // for query
+  final String? separator; // for concat
+  final String? operator; // for math, case
+  final List<CalculationConfig>? parts; // for concat, math
+  final List<CaseConfig>? cases; // for case
+  final CalculationConfig? defaultValue; // for case else
+  final bool preserve; // if true, don't recompute in edit mode if value exists
+
+  CalculationConfig({
+    required this.type,
+    this.value,
+    this.field,
+    this.sql,
+    this.sqlParams,
+    this.separator,
+    this.operator,
+    this.parts,
+    this.cases,
+    this.defaultValue,
+    this.preserve = false,
+  });
+}
+
+class CaseConfig {
+  final String field;
+  final String operator;
+  final String value;
+  final CalculationConfig result;
+
+  CaseConfig({
+    required this.field,
+    required this.operator,
+    required this.value,
+    required this.result,
+  });
+}
+
 class Question {
   final QuestionType type;
   final String fieldName;
@@ -90,15 +152,16 @@ class Question {
   final int? maxCharacters;
   final NumericCheck? numericCheck;
   final List<QuestionOption> options;
-  final ResponseConfig? responseConfig;  // New: for dynamic responses
-  final List<SkipCondition> preSkips;  // Evaluated before showing the question
+  final ResponseConfig? responseConfig; // New: for dynamic responses
+  final List<SkipCondition> preSkips; // Evaluated before showing the question
   final List<SkipCondition> postSkips; // Evaluated after user answers
-  final String? logicCheck;
-  final String? dontKnow; // Special response value for "Don't know" (e.g., "-7")
-  final String? refuse;   // Special response value for "Refuse" (e.g., "-8")
-  final String? minDate;  // Date range constraint (e.g., "-1y")
-  final String? maxDate;  // Date range constraint (e.g., "+0d")
+  final LogicCheck? logicCheck;
+  final String? dontKnow;
+  final String? refuse;
+  final DateTime? minDate;
+  final DateTime? maxDate;
   final UniqueCheck? uniqueCheck;
+  final CalculationConfig? calculation;
 
   Question({
     required this.type,
@@ -117,31 +180,6 @@ class Question {
     this.minDate,
     this.maxDate,
     this.uniqueCheck,
+    this.calculation,
   });
-}
-
-/// Simple answer store type: for checkboxes, store List<String>, for others String.
-typedef AnswerMap = Map<String, dynamic>;
-
-QuestionType parseQuestionType(String raw) {
-  switch (raw.toLowerCase()) {
-    case 'automatic':
-      return QuestionType.automatic;
-    case 'text':
-      return QuestionType.text;
-    case 'checkbox':
-      return QuestionType.checkbox;
-    case 'radio':
-      return QuestionType.radio;
-    case 'information':
-      return QuestionType.information;
-    case 'date':
-      return QuestionType.date;
-    case 'combobox':
-      return QuestionType.combobox;
-    case 'datetime':
-      return QuestionType.datetime;
-    default:
-      return QuestionType.information;
-  }
 }
