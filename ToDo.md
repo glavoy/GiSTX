@@ -9,6 +9,7 @@
 - Add stats. All eligible variables in accordian type, one opens, one closes
 - revisit 'repeat' sections - maybe have them 'inline' - asked at a point in time before the 'main' survey is over - then user can go 'back' through all of them.
 - Add 'button' question type?
+- Add dynamic date ranges. If someone is two years old, don't let date go back now tham 2 years. This can also be logic check
 
 
 
@@ -17,7 +18,7 @@
 ## GistXConfig
 - look at the code for parsing skips - add multiple logic: if xxx = 1 and yyy < 5, then skip to...
 - verify logic check variables are not in the future - i.e. they alreayd have a value
-- add 'help' screen to gistcongigx so user can see all of the options
+- add 'help' screen to gistcongigx so user can see all of the options - add link to README
 
 
 ## To test

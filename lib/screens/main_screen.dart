@@ -5,6 +5,7 @@ import '../services/survey_config_service.dart';
 import 'questionnaire_selector_screen.dart';
 import 'settings_screen.dart';
 import 'sync_screen.dart';
+import 'summary_statistics_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -122,6 +123,11 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       appBar: AppBar(
         actions: [
+          IconButton(
+            icon: const Icon(Icons.analytics_outlined),
+            tooltip: 'Summary Statistics',
+            onPressed: () => _navigateToStatistics(context),
+          ),
           IconButton(
             icon: const Icon(Icons.cloud_sync_outlined),
             tooltip: 'Sync Center',
@@ -316,6 +322,34 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _navigateToStatistics(BuildContext context) async {
+    // Check if settings are configured
+    final isConfigured = await _surveyConfig.areSettingsConfigured();
+
+    if (!isConfigured) {
+      if (context.mounted) _showSettingsRequiredDialog(context);
+      return;
+    }
+
+    // Get active survey ID
+    final activeSurvey = await _settingsService.activeSurvey;
+    if (activeSurvey == null || activeSurvey.isEmpty) {
+      if (context.mounted) _showSettingsRequiredDialog(context);
+      return;
+    }
+
+    if (context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SummaryStatisticsScreen(
+            surveyId: activeSurvey,
+          ),
+        ),
+      );
+    }
   }
 
   void _showSettingsRequiredDialog(BuildContext context) {
