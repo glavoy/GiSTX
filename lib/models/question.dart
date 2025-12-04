@@ -63,8 +63,8 @@ class ResponseConfig {
 }
 
 class NumericCheck {
-  final int? minValue;
-  final int? maxValue;
+  final num? minValue;
+  final num? maxValue;
   final String? otherValues; // comma-separated string of allowed exceptions
   final String? message;
 

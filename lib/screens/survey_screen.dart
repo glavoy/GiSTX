@@ -407,6 +407,32 @@ class _SurveyScreenState extends State<SurveyScreen> {
       final q = _loadedQuestions![_currentQuestion];
       _logicError = LogicService.evaluateLogicChecks(q, _answers);
 
+      // Perform numeric check validation
+      if (_logicError == null &&
+          q.type == QuestionType.text &&
+          q.numericCheck != null) {
+        final raw = _answers[q.fieldName]?.toString() ?? '';
+        if (raw.isNotEmpty) {
+          final parsed = num.tryParse(raw);
+          if (parsed != null) {
+            final nc = q.numericCheck!;
+            final exceptions = (nc.otherValues ?? '')
+                .split(',')
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toSet();
+
+            if (!exceptions.contains(parsed.toString())) {
+              if ((nc.minValue != null && parsed < nc.minValue!) ||
+                  (nc.maxValue != null && parsed > nc.maxValue!)) {
+                _logicError = nc.message ??
+                    'Value must be between ${nc.minValue} and ${nc.maxValue}';
+              }
+            }
+          }
+        }
+      }
+
       // Real-time duplicate check (New Record Mode only)
       if (widget.existingAnswers == null &&
           _pkFields.contains(q.fieldName.toLowerCase())) {
@@ -646,7 +672,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
         if (q.dontKnow != null && valStr == q.dontKnow) return true;
         if (q.refuse != null && valStr == q.refuse) return true;
         // Otherwise, must be a valid DateTime
-        return val is DateTime || (val is String && DateTime.tryParse(valStr) != null);
+        return val is DateTime ||
+            (val is String && DateTime.tryParse(valStr) != null);
       case QuestionType.datetime:
         return val != null && val.toString().isNotEmpty;
       case QuestionType.information:
@@ -657,26 +684,24 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
   bool _isValid(Question q) {
     // For integer text fields, enforce numeric_check range
-    if (q.type == QuestionType.text &&
-        q.fieldType.toLowerCase().contains('integer')) {
+    // For text fields with numeric_check, enforce range
+    if (q.type == QuestionType.text && q.numericCheck != null) {
       final raw = _answers[q.fieldName]?.toString() ?? '';
       if (raw.isEmpty) return false;
 
-      final parsed = int.tryParse(raw);
+      final parsed = num.tryParse(raw);
       if (parsed == null) return false;
 
-      final nc = q.numericCheck;
-      if (nc != null) {
-        final exceptions = (nc.otherValues ?? '')
-            .split(',')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .toSet();
+      final nc = q.numericCheck!;
+      final exceptions = (nc.otherValues ?? '')
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toSet();
 
-        if (!exceptions.contains(parsed.toString())) {
-          if (nc.minValue != null && parsed < nc.minValue!) return false;
-          if (nc.maxValue != null && parsed > nc.maxValue!) return false;
-        }
+      if (!exceptions.contains(parsed.toString())) {
+        if (nc.minValue != null && parsed < nc.minValue!) return false;
+        if (nc.maxValue != null && parsed > nc.maxValue!) return false;
       }
     }
     return true;
@@ -1344,8 +1369,10 @@ class _SurveyScreenState extends State<SurveyScreen> {
   /// Show dialog when user must complete all entities
   /// When enforceCountMode is 2 (Force), user cannot exit
   Future<bool> _showMustCompleteDialogWithEntity(
-      BuildContext context, int total, int current, String entityName, {bool allowExit = true}) async {
-    final entityNamePlural = entityName.endsWith('s') ? entityName : '${entityName}s';
+      BuildContext context, int total, int current, String entityName,
+      {bool allowExit = true}) async {
+    final entityNamePlural =
+        entityName.endsWith('s') ? entityName : '${entityName}s';
 
     final result = await showDialog<bool>(
       context: context,

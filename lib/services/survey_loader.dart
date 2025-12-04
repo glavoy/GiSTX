@@ -46,8 +46,8 @@ class SurveyLoader {
           final otherVals = valuesNode.getAttribute('other_values');
           final msg = valuesNode.getAttribute('message');
           numericCheck = NumericCheck(
-            minValue: minStr != null ? int.tryParse(minStr) : null,
-            maxValue: maxStr != null ? int.tryParse(maxStr) : null,
+            minValue: minStr != null ? num.tryParse(minStr) : null,
+            maxValue: maxStr != null ? num.tryParse(maxStr) : null,
             otherValues: otherVals,
             message: msg,
           );

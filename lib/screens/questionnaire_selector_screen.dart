@@ -15,6 +15,7 @@ class QuestionnaireInfo {
   final String? incrementField;
   final bool isBase;
   final String? idConfig;
+  final String? entryCondition;
 
   QuestionnaireInfo({
     required this.filename,
@@ -25,6 +26,7 @@ class QuestionnaireInfo {
     this.incrementField,
     this.isBase = false,
     this.idConfig,
+    this.entryCondition,
   });
 }
 
@@ -124,6 +126,7 @@ class _QuestionnaireSelectorScreenState
             final incrementField = record['incrementfield']?.toString();
             final isBase = (record['isbase'] as int?) == 1;
             final idConfig = record['idconfig']?.toString();
+            final entryCondition = record['entry_condition']?.toString();
 
             debugPrint(
                 '[QuestionnaireSelector] Adding questionnaire: $displayName ($filename)');
@@ -137,6 +140,7 @@ class _QuestionnaireSelectorScreenState
               incrementField: incrementField,
               isBase: isBase,
               idConfig: idConfig,
+              entryCondition: entryCondition,
             ));
           }
         }
@@ -195,6 +199,7 @@ class _QuestionnaireSelectorScreenState
               parentTable: questionnaire.parentTable!,
               incrementField: questionnaire.incrementField,
               idConfig: questionnaire.idConfig,
+              entryCondition: questionnaire.entryCondition,
             ),
           ),
         );

@@ -1,10 +1,9 @@
 ### To Do
-
+- when uploading a survey, it should use teh credentials that were used to download the survey - it measn storing multiple sets of credentials that are linked to the survey
 - Add 'time' question type
 - examine "idconfig" - have option of entering the subjid manually
 - subjid and hhid - these should be normal automatic variables - check these
-- [x] revisit automatic variables - is there a better way so we don;t need to change the code
-- a person can sleep under more than one net
+- a person can sleep under more than one net - how can we check this?
 - add functionality to modify a table if necessary - for example changing a field type from text to int and vice versa
 - Add stats. All eligible variables in accordian type, one opens, one closes
 - revisit 'repeat' sections - maybe have them 'inline' - asked at a point in time before the 'main' survey is over - then user can go 'back' through all of them.
