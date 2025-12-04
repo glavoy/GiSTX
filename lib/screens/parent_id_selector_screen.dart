@@ -14,6 +14,7 @@ class ParentIdSelectorScreen extends StatefulWidget {
   final String parentTable;
   final String? incrementField;
   final String? idConfig;
+  final String? entryCondition;
 
   const ParentIdSelectorScreen({
     super.key,
@@ -22,6 +23,7 @@ class ParentIdSelectorScreen extends StatefulWidget {
     required this.parentTable,
     this.incrementField,
     this.idConfig,
+    this.entryCondition,
   });
 
   @override
@@ -66,10 +68,32 @@ class _ParentIdSelectorScreenState extends State<ParentIdSelectorScreen> {
           await DbService.getExistingRecords(surveyId, widget.parentTable);
 
       final uniqueIds = <String>{};
+
+      // Parse entry condition if present
+      String? conditionField;
+      String? conditionValue;
+      if (widget.entryCondition != null &&
+          widget.entryCondition!.contains('=')) {
+        final parts = widget.entryCondition!.split('=');
+        if (parts.length == 2) {
+          conditionField = parts[0].trim().toLowerCase();
+          conditionValue = parts[1].trim();
+        }
+      }
+
       for (final record in records) {
         // Normalize keys to lowercase for case-insensitive lookup
         final normalizedRecord =
             record.map((k, v) => MapEntry(k.toLowerCase(), v));
+
+        // Check entry condition if defined
+        if (conditionField != null && conditionValue != null) {
+          final recordValue = normalizedRecord[conditionField]?.toString();
+          // Simple string comparison
+          if (recordValue != conditionValue) {
+            continue; // Skip this record if condition not met
+          }
+        }
 
         final val = normalizedRecord[widget.linkingField.toLowerCase()];
         if (val != null && val.toString().isNotEmpty) {
@@ -84,7 +108,9 @@ class _ParentIdSelectorScreenState extends State<ParentIdSelectorScreen> {
       if (_availableIds.isEmpty) {
         setState(() {
           _errorMessage =
-              'No ${widget.linkingField} found in ${widget.parentTable} table.\n\nPlease complete a ${widget.parentTable} questionnaire first.';
+              'No eligible ${widget.linkingField} found in ${widget.parentTable} table.\n\n'
+              '${widget.entryCondition != null ? "Note: Only records matching '${widget.entryCondition}' are shown.\n\n" : ""}'
+              'Please complete a ${widget.parentTable} questionnaire first.';
           _isLoading = false;
         });
         return;

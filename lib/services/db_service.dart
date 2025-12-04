@@ -314,7 +314,8 @@ class DbService {
           repeat_count_field TEXT,
           auto_start_repeat INTEGER, 
           repeat_enforce_count INTEGER,
-          display_fields TEXT
+          display_fields TEXT,
+          entry_condition TEXT
         )
       ''');
     }
