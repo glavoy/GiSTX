@@ -184,6 +184,9 @@ class DbService {
       // 1b. Create Form Changes Table
       await _syncFormChangesTable(surveyId, db);
 
+      // 1c. Import CSV files as tables
+      await _importCsvFiles(surveyId, db);
+
       // 2. Create Survey Tables from XMLs
       final xmlFiles = manifest['xmlFiles'] as List?;
       if (xmlFiles != null) {
@@ -194,6 +197,98 @@ class DbService {
     } catch (e) {
       _logError('Error syncing schema for $surveyId: $e');
     }
+  }
+
+  static Future<void> _importCsvFiles(String surveyId, Database db) async {
+    try {
+      final surveysDir = await _getSurveysDirectory();
+      final surveyDir = Directory(p.join(surveysDir.path, surveyId));
+
+      if (!await surveyDir.exists()) return;
+
+      final entities = await surveyDir.list().toList();
+      final csvFiles =
+          entities.where((e) => e.path.toLowerCase().endsWith('.csv')).toList();
+
+      for (final entity in csvFiles) {
+        if (entity is File) {
+          await _importSingleCsv(db, entity);
+        }
+      }
+    } catch (e) {
+      _logError('Error importing CSV files for $surveyId: $e');
+    }
+  }
+
+  static Future<void> _importSingleCsv(Database db, File csvFile) async {
+    try {
+      final tableName = p.basenameWithoutExtension(csvFile.path).toLowerCase();
+      _log('Importing CSV: $tableName...');
+
+      final content = await csvFile.readAsString();
+      if (content.trim().isEmpty) return;
+
+      final lines = const LineSplitter().convert(content);
+      if (lines.isEmpty) return;
+
+      // Parse header
+      final headerLine = lines.first;
+      // Split by comma, trim whitespace, and remove empty headers (handles trailing commas)
+      final headers = headerLine
+          .split(',')
+          .map((h) => _cleanCsvValue(h))
+          .where((h) => h.isNotEmpty)
+          .toList();
+
+      if (headers.isEmpty) return;
+
+      // 1. Create Table
+      // We'll treat all columns as TEXT for simplicity and flexibility
+      final buffer = StringBuffer();
+      buffer.write('CREATE TABLE IF NOT EXISTS $tableName (');
+      buffer.write(headers.map((h) => '$h TEXT').join(', '));
+      buffer.write(')');
+
+      await db.execute(buffer.toString());
+
+      // 2. Clear existing data (full refresh from CSV)
+      await db.delete(tableName);
+
+      // 3. Insert data
+      final batch = db.batch();
+
+      for (var i = 1; i < lines.length; i++) {
+        final line = lines[i];
+        if (line.trim().isEmpty) continue;
+
+        // Simple split
+        final rawValues = line.split(',');
+        final values = rawValues.map((v) => _cleanCsvValue(v)).toList();
+
+        final row = <String, dynamic>{};
+        for (var j = 0; j < headers.length; j++) {
+          if (j < values.length) {
+            row[headers[j]] = values[j];
+          } else {
+            row[headers[j]] = null;
+          }
+        }
+        batch.insert(tableName, row);
+      }
+
+      await batch.commit(noResult: true);
+      _log('Imported ${lines.length - 1} rows into $tableName');
+    } catch (e) {
+      _logError('Failed to import CSV ${csvFile.path}: $e');
+    }
+  }
+
+  static String _cleanCsvValue(String value) {
+    var v = value.trim();
+    if (v.startsWith('"') && v.endsWith('"')) {
+      v = v.substring(1, v.length - 1);
+    }
+    return v.trim();
   }
 
   static Future<void> _syncCrfsTable(
