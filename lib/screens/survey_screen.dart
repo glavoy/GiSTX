@@ -911,7 +911,9 @@ class _SurveyScreenState extends State<SurveyScreen> {
                 );
               },
             ),
-            title: widget.repeatIndex != null && widget.repeatTotal != null
+            title: (widget.repeatIndex != null && widget.repeatTotal != null) ||
+                    (widget.primaryKeyFields != null &&
+                        widget.primaryKeyFields!.isNotEmpty)
                 ? Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -920,9 +922,14 @@ class _SurveyScreenState extends State<SurveyScreen> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      '${widget.repeatEntityName ?? "Member"} ${widget.repeatIndex} of ${widget.repeatTotal}',
+                      widget.repeatIndex != null && widget.repeatTotal != null
+                          ? '${widget.repeatEntityName ?? "Member"} ${widget.repeatIndex} of ${widget.repeatTotal}'
+                          : widget.primaryKeyFields != null &&
+                                  widget.primaryKeyFields!.isNotEmpty
+                              ? 'Viewing: ${widget.primaryKeyFields!.map((field) => '${field.toUpperCase()}: ${_answers[field]?.toString() ?? '-'}').join(', ')}'
+                              : '',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: Colors.blue.shade900,
                       ),
@@ -939,54 +946,6 @@ class _SurveyScreenState extends State<SurveyScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Primary key fields display (for edit mode)
-                      if (widget.primaryKeyFields != null &&
-                          widget.primaryKeyFields!.isNotEmpty)
-                        Card(
-                          color: Colors.blue.shade50,
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.info_outline,
-                                        size: 18, color: Colors.blue.shade700),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Viewing/Modifying Record:',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue.shade900,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                ...widget.primaryKeyFields!.map((field) {
-                                  final value =
-                                      _answers[field]?.toString() ?? '-';
-                                  return Padding(
-                                    padding:
-                                        const EdgeInsets.only(left: 26, top: 4),
-                                    child: Text(
-                                      '${field.toUpperCase()}: $value',
-                                      style: TextStyle(
-                                        color: Colors.blue.shade900,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ],
-                            ),
-                          ),
-                        ),
-                      if (widget.primaryKeyFields != null &&
-                          widget.primaryKeyFields!.isNotEmpty)
-                        const SizedBox(height: 12),
-
                       // Question text (fixed at top)
                       if ((q.text ?? '').isNotEmpty &&
                           q.type != QuestionType.information)
@@ -1034,15 +993,23 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
                       // Response area (scrollable)
                       Expanded(
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 300),
-                            switchInCurve: Curves.easeOut,
-                            switchOutCurve: Curves.easeIn,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          switchInCurve: Curves.linear,
+                          switchOutCurve: Curves.linear,
+                          layoutBuilder: (currentChild, previousChildren) {
+                            return Stack(
+                              alignment: Alignment.topCenter,
+                              children: <Widget>[
+                                ...previousChildren,
+                                if (currentChild != null) currentChild,
+                              ],
+                            );
+                          },
+                          child: Align(
+                            key: ValueKey(q.fieldName),
+                            alignment: Alignment.topCenter,
                             child: Card(
-                              key: ValueKey(q
-                                  .fieldName), // forces fresh state per question
                               child: SingleChildScrollView(
                                 child: Padding(
                                   padding: const EdgeInsets.all(18),
