@@ -7,6 +7,20 @@ import '../services/auto_fields.dart';
 import '../services/csv_data_service.dart';
 import '../services/database_response_service.dart';
 
+/// Custom TextInputFormatter that converts all input to uppercase
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return TextEditingValue(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+    );
+  }
+}
+
 class QuestionView extends StatefulWidget {
   final Question question;
   final AnswerMap answers; // shared map so we can restore / persist answers
@@ -271,6 +285,9 @@ class _QuestionViewState extends State<QuestionView> {
     }
     if (isIntegerField) {
       formatters.add(FilteringTextInputFormatter.digitsOnly);
+    } else {
+      // For non-integer fields, convert text to uppercase
+      formatters.add(UpperCaseTextFormatter());
     }
     String? _validateText(String val) {
       if (isIntegerField && val.isNotEmpty) {
@@ -298,12 +315,23 @@ class _QuestionViewState extends State<QuestionView> {
       return null;
     }
 
+    final errorMessage = widget.logicError ?? _textError;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if ((q.text ?? '').isNotEmpty)
           _buildSectionTitle(
               SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
+        if (errorMessage != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              errorMessage,
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.error, fontSize: 12),
+            ),
+          ),
         TextField(
           controller: _textController,
           focusNode: _textFocusNode,
@@ -317,9 +345,8 @@ class _QuestionViewState extends State<QuestionView> {
           keyboardType:
               isIntegerField ? TextInputType.number : TextInputType.text,
           inputFormatters: formatters,
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             hintText: 'Type your answer',
-            errorText: widget.logicError ?? _textError,
           ),
           onChanged: (val) {
             setState(() {

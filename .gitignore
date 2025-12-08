@@ -132,5 +132,4 @@ linux/flutter/ephemeral/
 
 
 # Geoff
-/assets/database/fake_survey.sqlite
-/assets/database/household_survey.sqlite
+/installer_output/
