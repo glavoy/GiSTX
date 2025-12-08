@@ -150,6 +150,7 @@ class Question {
   final String fieldType;
   final String? text;
   final int? maxCharacters;
+  final bool fixedLength;
   final NumericCheck? numericCheck;
   final List<QuestionOption> options;
   final ResponseConfig? responseConfig; // New: for dynamic responses
@@ -169,6 +170,7 @@ class Question {
     required this.fieldType,
     this.text,
     this.maxCharacters,
+    this.fixedLength = false,
     this.numericCheck,
     this.options = const [],
     this.responseConfig,

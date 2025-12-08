@@ -408,11 +408,19 @@ class _SurveyScreenState extends State<SurveyScreen> {
       _logicError = LogicService.evaluateLogicChecks(q, _answers);
 
       // Perform numeric check validation
-      if (_logicError == null &&
-          q.type == QuestionType.text &&
-          q.numericCheck != null) {
+      if (q.type == QuestionType.text) {
         final raw = _answers[q.fieldName]?.toString() ?? '';
-        if (raw.isNotEmpty) {
+
+        // Strict length check (if configured with <maxCharacters>=N)
+        if (q.fixedLength && q.maxCharacters != null) {
+          if (raw.length != q.maxCharacters) {
+            // Incomplete input: keep Next disabled, but HIDE error message
+            _logicError = null;
+            return; // Skip further validation until length is met
+          }
+        }
+
+        if (_logicError == null && q.numericCheck != null && raw.isNotEmpty) {
           final parsed = num.tryParse(raw);
           if (parsed != null) {
             final nc = q.numericCheck!;
@@ -685,23 +693,33 @@ class _SurveyScreenState extends State<SurveyScreen> {
   bool _isValid(Question q) {
     // For integer text fields, enforce numeric_check range
     // For text fields with numeric_check, enforce range
-    if (q.type == QuestionType.text && q.numericCheck != null) {
+    // For integer text fields, enforce numeric_check range
+    // For text fields with numeric_check, enforce range
+    if (q.type == QuestionType.text) {
       final raw = _answers[q.fieldName]?.toString() ?? '';
-      if (raw.isEmpty) return false;
 
-      final parsed = num.tryParse(raw);
-      if (parsed == null) return false;
+      // Strict length check
+      if (q.fixedLength && q.maxCharacters != null) {
+        if (raw.length != q.maxCharacters) return false;
+      }
 
-      final nc = q.numericCheck!;
-      final exceptions = (nc.otherValues ?? '')
-          .split(',')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toSet();
+      if (q.numericCheck != null) {
+        if (raw.isEmpty) return false;
 
-      if (!exceptions.contains(parsed.toString())) {
-        if (nc.minValue != null && parsed < nc.minValue!) return false;
-        if (nc.maxValue != null && parsed > nc.maxValue!) return false;
+        final parsed = num.tryParse(raw);
+        if (parsed == null) return false;
+
+        final nc = q.numericCheck!;
+        final exceptions = (nc.otherValues ?? '')
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toSet();
+
+        if (!exceptions.contains(parsed.toString())) {
+          if (nc.minValue != null && parsed < nc.minValue!) return false;
+          if (nc.maxValue != null && parsed > nc.maxValue!) return false;
+        }
       }
     }
     return true;
