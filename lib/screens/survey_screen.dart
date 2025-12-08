@@ -987,28 +987,76 @@ class _SurveyScreenState extends State<SurveyScreen> {
                           widget.primaryKeyFields!.isNotEmpty)
                         const SizedBox(height: 12),
 
-                      // Animated question card
+                      // Question text (fixed at top)
+                      if ((q.text ?? '').isNotEmpty &&
+                          q.type != QuestionType.information)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            SurveyLoader.expandPlaceholders(q.text!, _answers),
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+
+                      // Error display (fixed below question text) - shows only ONE error at a time
+                      if (_logicError != null)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                color: Theme.of(context).colorScheme.error,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _logicError!,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // Response area (scrollable)
                       Expanded(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
-                          switchInCurve: Curves.easeOut,
-                          switchOutCurve: Curves.easeIn,
-                          child: Card(
-                            key: ValueKey(
-                                q.fieldName), // forces fresh state per question
-                            child: Padding(
-                              padding: const EdgeInsets.all(18),
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
+                            switchInCurve: Curves.easeOut,
+                            switchOutCurve: Curves.easeIn,
+                            child: Card(
+                              key: ValueKey(q
+                                  .fieldName), // forces fresh state per question
                               child: SingleChildScrollView(
-                                child: QuestionView(
-                                  key: ValueKey('view_${q.fieldName}'),
-                                  question: q,
-                                  answers: _answers,
-                                  onAnswerChanged: () => _onAnswerChanged(),
-                                  onRequestNext: () => _next(questions),
-                                  isEditMode: widget.uniqueId != null,
-                                  logicError: _logicError,
-                                  csvDataService: _csvDataService,
-                                  surveyId: _activeSurveyId ?? '',
+                                child: Padding(
+                                  padding: const EdgeInsets.all(18),
+                                  child: QuestionView(
+                                    key: ValueKey('view_${q.fieldName}'),
+                                    question: q,
+                                    answers: _answers,
+                                    onAnswerChanged: () => _onAnswerChanged(),
+                                    onRequestNext: () => _next(questions),
+                                    isEditMode: widget.uniqueId != null,
+                                    logicError: _logicError,
+                                    csvDataService: _csvDataService,
+                                    surveyId: _activeSurveyId ?? '',
+                                  ),
                                 ),
                               ),
                             ),
@@ -1016,7 +1064,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 56),
 
                       // Nav bar
                       Row(

@@ -1,6 +1,7 @@
 // lib/screens/settings_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../services/settings_service.dart';
 import '../services/survey_config_service.dart';
 
@@ -22,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _isLoading = true;
   bool _obscurePassword = true;
+  String _appVersion = '';
 
   @override
   void initState() {
@@ -31,6 +33,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _initialize() async {
     await _loadSettings();
+    await _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _appVersion = packageInfo.version;
+      });
+    }
   }
 
   @override
@@ -128,6 +140,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 key: _formKey,
                 child: ListView(
                   children: [
+                    // Version display at the top
+                    if (_appVersion.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 8, horizontal: 12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primaryContainer
+                              .withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              size: 16,
+                              color:
+                                  Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Version $_appVersion',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
                     const SizedBox(height: 24),
                     Text(
                       'User Settings',
