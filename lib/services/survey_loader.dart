@@ -31,9 +31,17 @@ class SurveyLoader {
 
       // Optional: <maxCharacters>...</maxCharacters>
       final maxCharsNode = q.getElement('maxCharacters');
-      final maxChars = maxCharsNode != null
-          ? int.tryParse(maxCharsNode.innerText.trim())
-          : null;
+      int? maxChars;
+      bool fixedLength = false;
+      if (maxCharsNode != null) {
+        final textConfig = maxCharsNode.innerText.trim();
+        if (textConfig.startsWith('=')) {
+          fixedLength = true;
+          maxChars = int.tryParse(textConfig.substring(1));
+        } else {
+          maxChars = int.tryParse(textConfig);
+        }
+      }
 
       // Optional: <numeric_check><values ... /></numeric_check>
       NumericCheck? numericCheck;
@@ -221,6 +229,7 @@ class SurveyLoader {
           fieldType: fieldType,
           text: text,
           maxCharacters: maxChars,
+          fixedLength: fixedLength,
           numericCheck: numericCheck,
           options: options,
           responseConfig: responseConfig,

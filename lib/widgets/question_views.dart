@@ -82,9 +82,11 @@ class _QuestionViewState extends State<QuestionView> {
     _radioSelection = existing != null ? existing.toString() : null;
     _comboboxSelection = existing != null ? existing.toString() : null;
 
-    debugPrint('[QuestionView] Initializing ${q.fieldName}: existing=$existing (type: ${existing.runtimeType}), _radioSelection=$_radioSelection, _comboboxSelection=$_comboboxSelection');
+    debugPrint(
+        '[QuestionView] Initializing ${q.fieldName}: existing=$existing (type: ${existing.runtimeType}), _radioSelection=$_radioSelection, _comboboxSelection=$_comboboxSelection');
     if (q.responseConfig != null) {
-      debugPrint('[QuestionView]   Has dynamic responses: source=${q.responseConfig!.source}');
+      debugPrint(
+          '[QuestionView]   Has dynamic responses: source=${q.responseConfig!.source}');
     }
 
     // Handle date/datetime initialization
@@ -176,14 +178,18 @@ class _QuestionViewState extends State<QuestionView> {
         setState(() {
           _dynamicOptions = options;
         });
-        debugPrint('[QuestionView] Loaded ${options.length} dynamic options for ${widget.question.fieldName}');
-        debugPrint('[QuestionView]   Current _radioSelection: $_radioSelection');
-        debugPrint('[QuestionView]   Options: ${options.map((o) => '${o.value}:${o.label}').take(5).join(', ')}${options.length > 5 ? '...' : ''}');
+        debugPrint(
+            '[QuestionView] Loaded ${options.length} dynamic options for ${widget.question.fieldName}');
+        debugPrint(
+            '[QuestionView]   Current _radioSelection: $_radioSelection');
+        debugPrint(
+            '[QuestionView]   Options: ${options.map((o) => '${o.value}:${o.label}').take(5).join(', ')}${options.length > 5 ? '...' : ''}');
 
         // Check if current selection exists in options
         if (_radioSelection != null) {
           final matchFound = options.any((opt) => opt.value == _radioSelection);
-          debugPrint('[QuestionView]   Selection "$_radioSelection" ${matchFound ? "FOUND" : "NOT FOUND"} in options');
+          debugPrint(
+              '[QuestionView]   Selection "$_radioSelection" ${matchFound ? "FOUND" : "NOT FOUND"} in options');
         }
       }
     } catch (e) {
@@ -290,6 +296,11 @@ class _QuestionViewState extends State<QuestionView> {
       formatters.add(UpperCaseTextFormatter());
     }
     String? _validateText(String val) {
+      // Strict length check: if incomplete, return null (silent error)
+      if (q.fixedLength && q.maxCharacters != null) {
+        if (val.length != q.maxCharacters) return null;
+      }
+
       if (isIntegerField && val.isNotEmpty) {
         final parsed = int.tryParse(val);
         if (parsed == null) {
@@ -364,13 +375,15 @@ class _QuestionViewState extends State<QuestionView> {
     // Use dynamic options if available, otherwise use static options
     final options = _dynamicOptions.isNotEmpty ? _dynamicOptions : q.options;
 
-    debugPrint('[QuestionView] Building radio for ${q.fieldName}: _radioSelection=$_radioSelection, options.length=${options.length}, _dynamicOptions.length=${_dynamicOptions.length}');
+    debugPrint(
+        '[QuestionView] Building radio for ${q.fieldName}: _radioSelection=$_radioSelection, options.length=${options.length}, _dynamicOptions.length=${_dynamicOptions.length}');
     if (_radioSelection != null && options.isNotEmpty) {
       final match = options.firstWhere(
         (opt) => opt.value == _radioSelection,
         orElse: () => QuestionOption(value: '', label: ''),
       );
-      debugPrint('[QuestionView]   Selection match: ${match.value.isEmpty ? "NOT FOUND" : "FOUND (${match.label})"}');
+      debugPrint(
+          '[QuestionView]   Selection match: ${match.value.isEmpty ? "NOT FOUND" : "FOUND (${match.label})"}');
     }
 
     // Show empty message if no options and config has empty message
@@ -410,11 +423,13 @@ class _QuestionViewState extends State<QuestionView> {
         // Wrap radio buttons in scrollbar with max height
         ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.5, // Max 50% of screen
+            maxHeight:
+                MediaQuery.of(context).size.height * 0.5, // Max 50% of screen
           ),
           child: Scrollbar(
             controller: _radioScrollController,
-            thumbVisibility: options.length > 5, // Show scrollbar if more than 5 options
+            thumbVisibility:
+                options.length > 5, // Show scrollbar if more than 5 options
             child: SingleChildScrollView(
               controller: _radioScrollController,
               child: RadioGroup<String>(
@@ -503,11 +518,13 @@ class _QuestionViewState extends State<QuestionView> {
         // Wrap checkbox options in scrollbar with max height
         ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.5, // Max 50% of screen
+            maxHeight:
+                MediaQuery.of(context).size.height * 0.5, // Max 50% of screen
           ),
           child: Scrollbar(
             controller: _checkboxScrollController,
-            thumbVisibility: options.length > 5, // Show scrollbar if more than 5 options
+            thumbVisibility:
+                options.length > 5, // Show scrollbar if more than 5 options
             child: SingleChildScrollView(
               controller: _checkboxScrollController,
               child: Column(
@@ -551,7 +568,8 @@ class _QuestionViewState extends State<QuestionView> {
                             // Deselecting is always allowed
                             _checkboxSelection.remove(opt.value);
                           }
-                          widget.answers[q.fieldName] = _checkboxSelection.toList();
+                          widget.answers[q.fieldName] =
+                              _checkboxSelection.toList();
                         });
                         widget.onAnswerChanged?.call();
                       },
