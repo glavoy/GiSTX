@@ -55,7 +55,6 @@ class _QuestionViewState extends State<QuestionView> {
   String? _comboboxSelection;
   DateTime? _selectedDate;
   DateTime? _selectedDateTime;
-  String? _textError;
   List<QuestionOption> _dynamicOptions = [];
   final ScrollController _radioScrollController = ScrollController();
   final ScrollController _checkboxScrollController = ScrollController();
@@ -234,7 +233,6 @@ class _QuestionViewState extends State<QuestionView> {
         _selectedDate = null;
         _selectedDateTime = null;
       }
-      _textError = null;
       setState(() {}); // ensure rebuild
 
       // Request focus for text questions when they appear
@@ -295,54 +293,10 @@ class _QuestionViewState extends State<QuestionView> {
       // For non-integer fields, convert text to uppercase
       formatters.add(UpperCaseTextFormatter());
     }
-    String? _validateText(String val) {
-      // Strict length check: if incomplete, return null (silent error)
-      if (q.fixedLength && q.maxCharacters != null) {
-        if (val.length != q.maxCharacters) return null;
-      }
-
-      if (isIntegerField && val.isNotEmpty) {
-        final parsed = int.tryParse(val);
-        if (parsed == null) {
-          return 'Enter a number';
-        }
-        final nc = q.numericCheck;
-        if (nc != null) {
-          final exceptions = (nc.otherValues ?? '')
-              .split(',')
-              .map((s) => s.trim())
-              .where((s) => s.isNotEmpty)
-              .toSet();
-          if (!exceptions.contains(parsed.toString())) {
-            if (nc.minValue != null && parsed < nc.minValue!) {
-              return nc.message ?? 'Value must be >= ${nc.minValue}';
-            }
-            if (nc.maxValue != null && parsed > nc.maxValue!) {
-              return nc.message ?? 'Value must be <= ${nc.maxValue}';
-            }
-          }
-        }
-      }
-      return null;
-    }
-
-    final errorMessage = widget.logicError ?? _textError;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty)
-          _buildSectionTitle(
-              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
-        if (errorMessage != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Text(
-              errorMessage,
-              style: TextStyle(
-                  color: Theme.of(context).colorScheme.error, fontSize: 12),
-            ),
-          ),
         TextField(
           controller: _textController,
           focusNode: _textFocusNode,
@@ -360,9 +314,6 @@ class _QuestionViewState extends State<QuestionView> {
             hintText: 'Type your answer',
           ),
           onChanged: (val) {
-            setState(() {
-              _textError = _validateText(val);
-            });
             widget.answers[q.fieldName] = val;
             widget.onAnswerChanged?.call();
           },
@@ -408,31 +359,8 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty)
-          _buildSectionTitle(
-              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
-        if (widget.logicError != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Text(
-              widget.logicError!,
-              style: TextStyle(
-                  color: Theme.of(context).colorScheme.error, fontSize: 12),
-            ),
-          ),
-        // Wrap radio buttons in scrollbar with max height
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight:
-                MediaQuery.of(context).size.height * 0.5, // Max 50% of screen
-          ),
-          child: Scrollbar(
-            controller: _radioScrollController,
-            thumbVisibility:
-                options.length > 5, // Show scrollbar if more than 5 options
-            child: SingleChildScrollView(
-              controller: _radioScrollController,
-              child: RadioGroup<String>(
+        // Radio buttons
+        RadioGroup<String>(
                 groupValue: _radioSelection,
                 onChanged: (val) {
                   setState(() {
@@ -459,9 +387,6 @@ class _QuestionViewState extends State<QuestionView> {
                         ),
                       )
                       .toList(),
-                ),
-              ),
-            ),
           ),
         ),
       ],
@@ -503,32 +428,9 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty)
-          _buildSectionTitle(
-              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
-        if (widget.logicError != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Text(
-              widget.logicError!,
-              style: TextStyle(
-                  color: Theme.of(context).colorScheme.error, fontSize: 12),
-            ),
-          ),
-        // Wrap checkbox options in scrollbar with max height
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight:
-                MediaQuery.of(context).size.height * 0.5, // Max 50% of screen
-          ),
-          child: Scrollbar(
-            controller: _checkboxScrollController,
-            thumbVisibility:
-                options.length > 5, // Show scrollbar if more than 5 options
-            child: SingleChildScrollView(
-              controller: _checkboxScrollController,
-              child: Column(
-                children: options.map((opt) {
+        // Checkbox options
+        Column(
+          children: options.map((opt) {
                   final checked = _checkboxSelection.contains(opt.value);
                   debugPrint(
                       '  Option ${opt.value} (${opt.label}): checked=$checked');
@@ -575,10 +477,7 @@ class _QuestionViewState extends State<QuestionView> {
                       },
                     ),
                   );
-                }).toList(),
-              ),
-            ),
-          ),
+          }).toList(),
         ),
       ],
     );
@@ -610,18 +509,6 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty)
-          _buildSectionTitle(
-              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
-        if (widget.logicError != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0, left: 12.0),
-            child: Text(
-              widget.logicError!,
-              style: TextStyle(
-                  color: Theme.of(context).colorScheme.error, fontSize: 12),
-            ),
-          ),
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -669,9 +556,6 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty)
-          _buildSectionTitle(
-              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         InkWell(
           onTap: () async {
             // Calculate date limits
@@ -831,9 +715,6 @@ class _QuestionViewState extends State<QuestionView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty)
-          _buildSectionTitle(
-              SurveyLoader.expandPlaceholders(q.text!, widget.answers)),
         InkWell(
           onTap: () async {
             final pickedDate = await showDatePicker(
