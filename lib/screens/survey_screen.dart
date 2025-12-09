@@ -366,11 +366,6 @@ class _SurveyScreenState extends State<SurveyScreen> {
             }
           } catch (_) {}
 
-          debugPrint(
-              '[ChangeDetection] Change in $key: "$oldValue" -> "$newValue"');
-          // q and allowNumericEquivalence logic removed as we now check all numerics
-          debugPrint('  (Numeric equivalence check failed or not numeric)');
-
           return true;
         }
       }

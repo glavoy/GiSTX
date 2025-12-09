@@ -100,13 +100,6 @@ class _QuestionViewState extends State<QuestionView> {
     _radioSelection = existing != null ? existing.toString() : null;
     _comboboxSelection = existing != null ? existing.toString() : null;
 
-    debugPrint(
-        '[QuestionView] Initializing ${q.fieldName}: existing=$existing (type: ${existing.runtimeType}), _radioSelection=$_radioSelection, _comboboxSelection=$_comboboxSelection');
-    if (q.responseConfig != null) {
-      debugPrint(
-          '[QuestionView]   Has dynamic responses: source=${q.responseConfig!.source}');
-    }
-
     // Handle date/datetime initialization
     if (existing is DateTime) {
       _selectedDate = existing;
@@ -128,14 +121,14 @@ class _QuestionViewState extends State<QuestionView> {
 
     // Centralized automatic variable calculation
     // Only compute automatic fields, NOT date/datetime fields
+    // Centralized automatic variable calculation
+    // Only compute automatic fields, NOT date/datetime fields
     // Date/datetime fields should require explicit user selection
     if (q.type == QuestionType.automatic || q.calculation != null) {
       // Force calculation if it's automatic OR has a calculation defined
       // We do NOT check 'existing == null' here anymore, because we want updates
       // to propagate (AutoFields.compute handles 'preserve' flag if needed).
-      if (q.type != QuestionType.date && q.type != QuestionType.datetime) {
-        _computeAutoValue();
-      }
+      _computeAutoValue();
     }
 
     // Autofocus text input on initial load when applicable
@@ -199,12 +192,6 @@ class _QuestionViewState extends State<QuestionView> {
         setState(() {
           _dynamicOptions = options;
         });
-        debugPrint(
-            '[QuestionView] Loaded ${options.length} dynamic options for ${widget.question.fieldName}');
-        debugPrint(
-            '[QuestionView]   Current _radioSelection: $_radioSelection');
-        debugPrint(
-            '[QuestionView]   Options: ${options.map((o) => '${o.value}:${o.label}').take(5).join(', ')}${options.length > 5 ? '...' : ''}');
 
         // Check if current selection exists in options
         if (_radioSelection != null) {
@@ -254,13 +241,9 @@ class _QuestionViewState extends State<QuestionView> {
                 if (mounted) widget.onAnswerChanged?.call();
               });
             } else if (isFuzzyMatch) {
-              debugPrint(
-                  '[QuestionView] Fuzzy match detected ("$currentAnswer" ~ "$_radioSelection"). Preserving original answer to avoid change detection.');
+              // Fuzzy match detected ("$currentAnswer" ~ "$_radioSelection"). Preserving original answer to avoid change detection.
             }
           }
-
-          debugPrint(
-              '[QuestionView]   Selection "$_radioSelection" ${matchFound ? "FOUND" : "NOT FOUND"} in options');
         }
       }
     } catch (e) {
