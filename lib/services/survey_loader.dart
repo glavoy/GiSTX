@@ -236,6 +236,10 @@ class SurveyLoader {
       final calculationNode = q.getElement('calculation');
       final calculation = _parseCalculation(calculationNode);
 
+      // Parse mask
+      final maskNode = q.getElement('mask');
+      final mask = maskNode?.getAttribute('value');
+
       questions.add(
         Question(
           type: type,
@@ -257,6 +261,7 @@ class SurveyLoader {
           maxDate: maxDate,
           uniqueCheck: uniqueCheck,
           calculation: calculation,
+          mask: mask,
         ),
       );
     }
@@ -281,13 +286,16 @@ class SurveyLoader {
   static DateTime? _parseDate(String dateStr) {
     if (dateStr.isEmpty) return null;
 
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
     // Handle "0" as today
     if (dateStr == '0') {
-      return DateTime.now();
+      return today;
     }
 
-    // Check for relative date format (e.g., "-3y", "+1y", "-6m", "-30d")
-    final relativePattern = RegExp(r'^([+-]?\d+)([ymd])$');
+    // Check for relative date format (e.g., "-3y", "+1y", "-6m", "-30d", "+4w")
+    final relativePattern = RegExp(r'^([+-]?\d+)([ymwd])$');
     final match = relativePattern.firstMatch(dateStr);
 
     if (match != null) {
@@ -295,13 +303,12 @@ class SurveyLoader {
       final unit = match.group(2)!;
 
       if (value != null) {
-        final now = DateTime.now();
         switch (unit) {
           case 'y': // years
-            return DateTime(now.year + value, now.month, now.day);
+            return DateTime(today.year + value, today.month, today.day);
           case 'm': // months
-            int newMonth = now.month + value;
-            int newYear = now.year;
+            int newMonth = today.month + value;
+            int newYear = today.year;
             while (newMonth > 12) {
               newMonth -= 12;
               newYear++;
@@ -310,16 +317,23 @@ class SurveyLoader {
               newMonth += 12;
               newYear--;
             }
-            return DateTime(newYear, newMonth, now.day);
+            return DateTime(newYear, newMonth, today.day);
+          case 'w': // weeks
+            return today.add(Duration(days: value * 7));
           case 'd': // days
-            return now.add(Duration(days: value));
+            return today.add(Duration(days: value));
         }
       }
     }
 
-    // Try parsing as ISO date
+    // Try parsing as ISO date (e.g., "2025-03-01")
     try {
-      return DateTime.parse(dateStr);
+      final parsed = DateTime.parse(dateStr);
+      // If it doesn't contain time separator 'T', ensure it's local midnight
+      if (!dateStr.contains('T')) {
+        return DateTime(parsed.year, parsed.month, parsed.day);
+      }
+      return parsed;
     } catch (_) {
       return null;
     }
@@ -333,6 +347,7 @@ class SurveyLoader {
     final field = _sanitizeField(node.getAttribute('field'));
     final separator = node.getAttribute('separator');
     final operator = node.getAttribute('operator');
+    final unit = node.getAttribute('unit');
     final preserve = node.getAttribute('preserve') == 'true';
 
     // Parse SQL
@@ -402,6 +417,7 @@ class SurveyLoader {
       parts: parts,
       cases: cases,
       defaultValue: defaultValue,
+      unit: unit,
       preserve: preserve,
     );
   }
@@ -454,6 +470,13 @@ class SurveyLoader {
       if (val is List) return val.join(', ');
       return val.toString();
     });
+  }
+
+  /// Check if a question text starts with "Warning" or "Warning!" (case-insensitive)
+  static bool isWarning(String? text) {
+    if (text == null) return false;
+    final trimmed = text.trim().toLowerCase();
+    return trimmed.startsWith('warning');
   }
 }
 

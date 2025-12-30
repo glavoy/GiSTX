@@ -10,6 +10,7 @@ Automatic variables are defined using the `<question>` tag with `type="automatic
 The following automatic variables are **built-in** and do **NOT** require a `<calculation>` element. The app handles them automatically if the `fieldname` matches:
 
 *   `starttime`: Records the timestamp when the survey started.
+*   `startdate`: Records the date when the survey started (yyyy-mm-dd).
 *   `stoptime`: Records the timestamp when the survey finished.
 *   `uniqueid`: The unique identifier for the record.
 *   `swver`: The version of the software used.
@@ -256,3 +257,48 @@ Determines if a participant is eligible based on Age AND Gender.
   </calculation>
 </question>
 ```
+
+### 7. `date_offset`
+
+Calculates a new date by adding or subtracting time from an existing date field.
+
+**Attributes:**
+*   `field`: The field name of the base date (must be a `date` or `datetime` field).
+*   `value`: The offset string (e.g., `+28d`, `-1y`, `+4w`, `-6m`).
+    *   `d`: Days
+    *   `w`: Weeks
+    *   `m`: Months
+    *   `y`: Years
+
+**Example:**
+```xml
+<question type="automatic" fieldname="dose2_due_date" fieldtype="date">
+    <calculation type="date_offset" field="vx_dose1_date" value="+28d" />
+</question>
+```
+
+### 8. `date_diff`
+
+Calculates the difference between two dates.
+
+**Attributes:**
+*   `field`: The start date field (or the literal string `today`).
+*   `value`: The end date field (or the literal string `today`).
+*   `unit`: The unit of time to return:
+    *   `d`: Days (default)
+    *   `w`: Weeks (whole weeks)
+    *   `m`: Months (whole months, accurately calculated)
+    *   `y`: Years (whole years, accurately calculated)
+
+**Example:**
+```xml
+<question type="automatic" fieldname="dose2_warning_time" fieldtype="integer">
+    <calculation type="date_diff" field="vx_dose1_date" value="vx_dose2_date" unit="w" />
+</question>
+```
+
+---
+
+## Important Notes
+*   **Sequential Execution**: Automatic calculations are performed in the order they appear in the XML. Ensure any field referenced in a `calculation` (e.g., through `field` or `sqlParams`) is defined BEFORE the automatic question.
+*   **Built-in Fields**: Standard fields like `uniqueid`, `starttime`, and `stoptime` are reserved and handled automatically by the system.

@@ -519,11 +519,13 @@ class DbService {
   }
 
   static Future<List<Map<String, dynamic>>> getExistingRecords(
-      String surveyId, String tableName) async {
+      String surveyId, String tableName,
+      {String? orderBy}) async {
     try {
       final db = await _getDbOrThrow(surveyId);
       if (!await _tableExists(db, tableName)) return [];
-      final results = await db.query(tableName);
+
+      final results = await db.query(tableName, orderBy: orderBy);
 
       // Normalize keys to lowercase to avoid case-sensitivity issues across platforms
       return results.map((row) {

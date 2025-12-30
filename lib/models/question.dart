@@ -113,6 +113,7 @@ class CalculationConfig {
   final List<CalculationConfig>? parts; // for concat, math
   final List<CaseConfig>? cases; // for case
   final CalculationConfig? defaultValue; // for case else
+  final String? unit; // for date_diff, etc.
   final bool preserve; // if true, don't recompute in edit mode if value exists
 
   CalculationConfig({
@@ -126,6 +127,7 @@ class CalculationConfig {
     this.parts,
     this.cases,
     this.defaultValue,
+    this.unit,
     this.preserve = false,
   });
 }
@@ -157,13 +159,15 @@ class Question {
   final ResponseConfig? responseConfig; // New: for dynamic responses
   final List<SkipCondition> preSkips; // Evaluated before showing the question
   final List<SkipCondition> postSkips; // Evaluated after user answers
-  final List<LogicCheck> logicChecks; // Multiple logic checks evaluated in order
+  final List<LogicCheck>
+      logicChecks; // Multiple logic checks evaluated in order
   final String? dontKnow;
   final String? refuse;
   final DateTime? minDate;
   final DateTime? maxDate;
   final UniqueCheck? uniqueCheck;
   final CalculationConfig? calculation;
+  final String? mask;
 
   Question({
     required this.type,
@@ -185,5 +189,6 @@ class Question {
     this.maxDate,
     this.uniqueCheck,
     this.calculation,
+    this.mask,
   });
 }

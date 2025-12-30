@@ -52,7 +52,8 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
           widget.questionnaireFilename.toLowerCase().replaceAll('.xml', '');
 
       final pkFields = await DbService.getPrimaryKeyFields(surveyId, tableName);
-      final records = await DbService.getExistingRecords(surveyId, tableName);
+      final records = await DbService.getExistingRecords(surveyId, tableName,
+          orderBy: 'lastmod DESC');
 
       // Get display fields configuration from CRFs table
       final crfConfig = await DbService.getCrfConfig(surveyId, tableName);
@@ -119,7 +120,7 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
         .where((v) => v.isNotEmpty)
         .toSet()
         .toList();
-    values.sort();
+    // We removed values.sort() to preserve the lastmod DESC order from the database
     return values;
   }
 

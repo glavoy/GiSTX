@@ -6,6 +6,10 @@
 	</question>
 
 
+	<question type = 'automatic' fieldname = 'startdate' fieldtype = 'date'>
+	</question>
+
+
 	<question type = 'text' fieldname = 'intnum' fieldtype = 'text_integer'>
 		<text>Interviewer's Number</text>
 		<maxCharacters>=2</maxCharacters>
@@ -15,17 +19,62 @@
 	</question>
 
 
-	<question type = 'radio' fieldname = 'district' fieldtype = 'integer'>
-		<text>District</text>
+	<question type = 'radio' fieldname = 'mrc' fieldtype = 'integer'>
+		<text>MRC of enrollment</text>
 		<responses>
-			<response value = '124'>BUSIA</response>
-			<response value = '181'>MAYUGE</response>
+			<response value = '096'>Busitema HC III</response>
+			<response value = '110'>Kigandalo HC IV</response>
 		</responses>
 	</question>
 
 
+	<question type = 'radio' fieldname = 'district' fieldtype = 'integer'>
+		<text>District of residence of enrollee</text>
+		<responses>
+			<response value = '124'>BUSIA</response>
+			<response value = '181'>MAYUGE</response>
+			<response value = '999'>Does not reside in either district</response>
+		</responses>
+		<postskip>
+			<skip fieldname='district' condition = '=' response='999' response_type='fixed' skiptofieldname ='placeofresidence'></skip>
+		</postskip>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'mayuge_warning' fieldtype = 'integer'>
+		<text>WARNING!
+
+You selected Busitema HC III and Mayuge as the district of residence!
+
+Do you want to proceed anyway?</text>
+		<responses>
+			<response value = '1'>Yes - I am at Busitema HC III and this participant resides in Mayuge district.</response>
+		</responses>
+		<preskip>
+			<skip fieldname='mrc' condition = '=' response='110' response_type='fixed' skiptofieldname ='busia_warning'></skip>
+			<skip fieldname='district' condition = '=' response='124' response_type='fixed' skiptofieldname ='subcounty'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'busia_warning' fieldtype = 'integer'>
+		<text>WARNING!
+
+You selected Kigandalo HC IV and Busia as the district of residence!
+
+Do you want to proceed anyway?</text>
+		<responses>
+			<response value = '1'>Yes - I am at Kigandalo HC IV and this participant resides in Busia district.</response>
+		</responses>
+		<preskip>
+			<skip fieldname='mrc' condition = '=' response='096' response_type='fixed' skiptofieldname ='subcounty'></skip>
+			<skip fieldname='district' condition = '=' response='181' response_type='fixed' skiptofieldname ='subcounty'></skip>
+		</preskip>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'subcounty' fieldtype = 'integer'>
-		<text>Subcounty</text>
+		<text>Subcounty of residence of enrollee</text>
 		<maxCharacters>=2</maxCharacters>
 		<responses source='csv' file='villages.csv'>
 			<filter column='districtid' operator='=' value='[[district]]'/>
@@ -36,7 +85,7 @@
 
 
 	<question type = 'radio' fieldname = 'parish' fieldtype = 'integer'>
-		<text>Parish</text>
+		<text>Parish of residence of enrollee</text>
 		<maxCharacters>=2</maxCharacters>
 		<responses source='csv' file='villages.csv'>
 			<filter column='districtid' operator='=' value='[[district]]'/>
@@ -48,7 +97,7 @@
 
 
 	<question type = 'radio' fieldname = 'village' fieldtype = 'integer'>
-		<text>Village of residence of individual</text>
+		<text>Village of residence of enrollee</text>
 		<maxCharacters>=2</maxCharacters>
 		<responses source='csv' file='villages.csv'>
 			<filter column='districtid' operator='=' value='[[district]]'/>
@@ -57,6 +106,15 @@
 			<display column='village'/>
 			<value column='villageid'/>
 		</responses>
+	</question>
+
+
+	<question type = 'text' fieldname = 'placeofresidence' fieldtype = 'text'>
+		<text>Enter the participants district, subcounty, parish and village of residence</text>
+		<maxCharacters>255</maxCharacters>
+		<preskip>
+			<skip fieldname='district' condition = '&lt;&gt;' response='999' response_type='fixed' skiptofieldname ='subjid'></skip>
+		</preskip>
 	</question>
 
 
@@ -87,8 +145,8 @@ If the exact month is unknown put the first month of the season of the year when
 	</question>
 
 
-	<question type = 'automatic' fieldname = 'age_at_may2025' fieldtype = 'integer'>
-		<calculation type='age_at_date' field='dob' value='months' separator='2025-05-31'/>
+	<question type = 'automatic' fieldname = 'age_at_apr2025' fieldtype = 'integer'>
+		<calculation type='age_at_date' field='dob' value='months' separator='2025-04-01'/>
 	</question>
 
 
@@ -97,7 +155,7 @@ If the exact month is unknown put the first month of the season of the year when
 			<when field='agemonths_calculated' operator='&lt;' value='8'>
 				<result type='constant' value='0' />
 			</when>
-			<when field='age_at_may2025' operator='&gt;' value='14'>
+			<when field='age_at_apr2025' operator='&gt;=' value='12'>
 				<result type='constant' value='0' />
 			</when>
 			<else>
@@ -138,7 +196,10 @@ Enter 0 if child is under 1 year old</text>
 	<question type = 'radio' fieldname = 'age_eligible' fieldtype = 'integer'>
 		<text>Age eligibility:
 
-Individual is 8 months or older at time of enrollment AND must have been no older than 14 months on May 31st, 2025 (eligible age cohort)</text>
+Years: [[age]]
+Months: [[agemonths]]
+
+Individual is 8 months or older at time of enrollment (today) AND was younger than 1 year (12 months) on April 1st, 2025</text>
 		<logic_check>
 			age_in_range = 1 and age_eligible = 0; 'Participant is within the age range and must be marked as age eligible!'
 		</logic_check>
@@ -150,7 +211,12 @@ Individual is 8 months or older at time of enrollment AND must have been no olde
 
 
 	<question type = 'radio' fieldname = 'age_warning' fieldtype = 'integer'>
-		<text>WARNING: The child's age is outside the protocol enrollment range (8 months to 22+ months shifting limit).
+		<text>WARNING!
+
+The child's age is outside the protocol enrollment range (8 months to 22+ months shifting limit).
+
+Years: [[age]]
+Months: [[agemonths]]
 
 Do you want to proceed with enrollment anyway?</text>
 		<responses>
@@ -198,7 +264,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'text' fieldname = 'participantsname' fieldtype = 'text'>
-		<text>Participant name?</text>
+		<text>Participant names?</text>
 		<maxCharacters>80</maxCharacters>
 		<preskip>
 			<skip fieldname='consent_eligible' condition = '=' response='0' response_type='fixed' skiptofieldname ='comments'></skip>
@@ -219,7 +285,7 @@ Do you want to proceed with enrollment anyway?</text>
 		<text>What is education level of the household head of the house the participant lives in?</text>
 		<responses>
 			<response value = '0'>No education/Never gone to school</response>
-			<response value = '1'>Nursary</response>
+			<response value = '1'>Nursery</response>
 			<response value = '2'>Primary</response>
 			<response value = '3'>Secondary</response>
 			<response value = '4'>Vocational</response>
@@ -283,6 +349,15 @@ Do you want to proceed with enrollment anyway?</text>
 	</question>
 
 
+	<question type = 'text' fieldname = 'vx_any_no_oth' fieldtype = 'text'>
+		<text>Specify other:</text>
+		<maxCharacters>80</maxCharacters>
+		<preskip>
+			<skip fieldname='vx_any_no' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_any'></skip>
+		</preskip>
+	</question>
+
+
 	<question type = 'text' fieldname = 'vx_doses_received' fieldtype = 'text_integer'>
 		<text>As of today's date, how many doses of malaria vaccine has [[participantsname]] received?</text>
 		<maxCharacters>1</maxCharacters>
@@ -296,7 +371,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'vx_doses_received_ver' fieldtype = 'integer'>
-		<text># doses, method of verification (Select one):</text>
+		<text>Method of verification of number of doses (Select one):</text>
 		<logic_check>
 			vx_card = 0 and vx_doses_received_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
 		</logic_check>
@@ -339,8 +414,8 @@ Do you want to proceed with enrollment anyway?</text>
 	<question type = 'date' fieldname = 'vx_dose1_date' fieldtype = 'date'>
 		<text>On what date was dose 1 of the malaria vaccine received?</text>
 		<date_range>
-			<min_date>-3y</min_date>
-			<max_date>-4m</max_date>
+			<min_date>2025-03-01</min_date>
+			<max_date>0</max_date>
 		</date_range>
 		<logic_check>
 			vx_dose1_date &lt; dob; 'Date of vaccination cannot be before date of birth!'
@@ -349,7 +424,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'vx_dose1_date_ver' fieldtype = 'integer'>
-		<text>date dose 1, method of verification</text>
+		<text>Method of verification of dose 1 date</text>
 		<logic_check>
 			vx_card = 0 and vx_dose1_date_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
 		</logic_check>
@@ -395,11 +470,11 @@ Do you want to proceed with enrollment anyway?</text>
 	<question type = 'date' fieldname = 'vx_dose2_date' fieldtype = 'date'>
 		<text>On what date was dose 2 of the malaria vaccine received?</text>
 		<date_range>
-			<min_date>-3y</min_date>
-			<max_date>-4m</max_date>
+			<min_date>2025-03-01</min_date>
+			<max_date>0</max_date>
 		</date_range>
 		<logic_check>
-			vx_dose2_date &lt; vx_dose1_date; 'Date of dose 2 cannot be before date of dose 1'
+			vx_dose2_date &lt;= vx_dose1_date; 'Date of dose 2 cannot be on or before date of dose 1'
 		</logic_check>
 		<logic_check>
 			vx_dose2_date &lt; dob; 'Date of vaccination cannot be before date of birth!'
@@ -407,8 +482,27 @@ Do you want to proceed with enrollment anyway?</text>
 	</question>
 
 
+	<question type = 'automatic' fieldname = 'dose2_warning_time' fieldtype = 'integer'>
+		<calculation type='date_diff' field='vx_dose1_date' value='vx_dose2_date' unit='w' />
+	</question>
+
+
+	<question type = 'radio' fieldname = 'vx_dose2_datecheck' fieldtype = 'integer'>
+		<text>WARNING!
+
+Dose 2 is less than 3 weeks after dose 1. Is this correct?
+Otherwise go back and correct the dose dates</text>
+		<responses>
+			<response value = '1'>Yes - proceed</response>
+		</responses>
+		<preskip>
+			<skip fieldname='dose2_warning_time' condition = '&gt;=' response='3' response_type='fixed' skiptofieldname ='vx_dose2_date_ver'></skip>
+		</preskip>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'vx_dose2_date_ver' fieldtype = 'integer'>
-		<text>date dose 2, method of verification</text>
+		<text>Method of verification of dose 2 date</text>
 		<logic_check>
 			vx_card = 0 and vx_dose2_date_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
 		</logic_check>
@@ -454,11 +548,11 @@ Do you want to proceed with enrollment anyway?</text>
 	<question type = 'date' fieldname = 'vx_dose3_date' fieldtype = 'date'>
 		<text>On what date was dose 3 of the malaria vaccine received?</text>
 		<date_range>
-			<min_date>-3y</min_date>
-			<max_date>-4m</max_date>
+			<min_date>2025-03-01</min_date>
+			<max_date>0</max_date>
 		</date_range>
 		<logic_check>
-			vx_dose3_date &lt; vx_dose2_date; 'Date of dose 3 cannot be before date of dose 2'
+			vx_dose3_date &lt;= vx_dose2_date; 'Date of dose 3 cannot be on or before date of dose 2'
 		</logic_check>
 		<logic_check>
 			vx_dose3_date &lt; dob; 'Date of vaccination cannot be before date of birth!'
@@ -466,8 +560,27 @@ Do you want to proceed with enrollment anyway?</text>
 	</question>
 
 
+	<question type = 'automatic' fieldname = 'dose3_warning_time' fieldtype = 'integer'>
+		<calculation type='date_diff' field='vx_dose2_date' value='vx_dose3_date' unit='w' />
+	</question>
+
+
+	<question type = 'radio' fieldname = 'vx_dose3_datecheck' fieldtype = 'integer'>
+		<text>WARNING!
+
+Dose 3 is less than 4 weeks after dose 2. Is this correct?
+Otherwise go back and correct the dose dates</text>
+		<responses>
+			<response value = '1'>Yes - proceed</response>
+		</responses>
+		<preskip>
+			<skip fieldname='dose3_warning_time' condition = '&gt;=' response='4' response_type='fixed' skiptofieldname ='vx_dose3_date_ver'></skip>
+		</preskip>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'vx_dose3_date_ver' fieldtype = 'integer'>
-		<text>date dose 3, method of verification</text>
+		<text>Method of verification of dose 3 date</text>
 		<logic_check>
 			vx_card = 0 and vx_dose3_date_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
 		</logic_check>
@@ -513,11 +626,11 @@ Do you want to proceed with enrollment anyway?</text>
 	<question type = 'date' fieldname = 'vx_dose4_date' fieldtype = 'date'>
 		<text>On what date was dose 4 of the malaria vaccine received?</text>
 		<date_range>
-			<min_date>-3y</min_date>
-			<max_date>-4m</max_date>
+			<min_date>2025-03-01</min_date>
+			<max_date>0</max_date>
 		</date_range>
 		<logic_check>
-			vx_dose4_date &lt; vx_dose3_date; 'Date of dose 4 cannot be before date of dose 3'
+			vx_dose4_date &lt;= vx_dose3_date; 'Date of dose 4 cannot be on or before date of dose 3'
 		</logic_check>
 		<logic_check>
 			vx_dose4_date &lt; dob; 'Date of vaccination cannot be before date of birth!'
@@ -525,8 +638,27 @@ Do you want to proceed with enrollment anyway?</text>
 	</question>
 
 
+	<question type = 'automatic' fieldname = 'dose4_warning_time' fieldtype = 'integer'>
+		<calculation type='date_diff' field='vx_dose3_date' value='vx_dose4_date' unit='m' />
+	</question>
+
+
+	<question type = 'radio' fieldname = 'vx_dose4_datecheck' fieldtype = 'integer'>
+		<text>WARNING!
+
+Dose 4 (booster) is less than ten months after dose 3. Is this correct?
+Otherwise go back and correct the dose dates</text>
+		<responses>
+			<response value = '1'>Yes - proceed</response>
+		</responses>
+		<preskip>
+			<skip fieldname='dose4_warning_time' condition = '&gt;=' response='10' response_type='fixed' skiptofieldname ='vx_dose4_date_ver'></skip>
+		</preskip>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'vx_dose4_date_ver' fieldtype = 'integer'>
-		<text>date dose 4, method of verification</text>
+		<text>Method of verification of dose 4 date</text>
 		<logic_check>
 			vx_card = 0 and vx_dose4_date_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
 		</logic_check>
@@ -547,8 +679,22 @@ Do you want to proceed with enrollment anyway?</text>
 	</question>
 
 
+	<question type = 'radio' fieldname = 'vx_dose_summary' fieldtype = 'integer'>
+		<text>Review and confirm the dates you have entered for malaria vaccine doses:
+Dose 1: [[vx_dose1_date]]
+Dose 2: [[vx_dose3_date]]
+Dose 3: [[vx_dose3_date]]
+Dose 4: [[vx_dose4_date]]</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No (go back and correct)</response>
+		</responses>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'vx_doses_miss' fieldtype = 'integer'>
-		<text>Have any doses been missed? (Confirm the age and timing of previous doses to assess this to discuss with the parent).</text>
+		<text>Have any doses been missed since starting the vaccine series? (Confirm the age and timing of previous doses to assess this to discuss with the parent).
+If the child started the series late</text>
 		<responses>
 			<response value = '1'>Yes</response>
 			<response value = '0'>No</response>
@@ -560,7 +706,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'vx_doses_miss_reas' fieldtype = 'integer'>
-		<text>What was the reason the doses were missed?</text>
+		<text>What was the primary reason the doses were missed?</text>
 		<responses>
 			<response value = '1'>Vaccine not available</response>
 			<response value = '2'>Could not travel to clinic</response>
@@ -580,7 +726,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'vx_dose_off_sched' fieldtype = 'integer'>
-		<text>Have any doses been received more than 2-weeks off-schedule?</text>
+		<text>Other than missed doses, have any doses been received more than 2-weeks off-schedule since starting the vaccine series (early or late)?</text>
 		<responses>
 			<response value = '1'>Yes</response>
 			<response value = '0'>No</response>
@@ -592,7 +738,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'vx_doses_offsched_reas' fieldtype = 'integer'>
-		<text>What was the reason for off-schedule doses?</text>
+		<text>What was the primary reason for off-schedule doses?</text>
 		<responses>
 			<response value = '1'>Vaccine not available</response>
 			<response value = '2'>Could not travel to clinic</response>
@@ -633,7 +779,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'hib_doses_received_ver' fieldtype = 'integer'>
-		<text># doses, method of verification (Select one):</text>
+		<text>Method of verification of number of doses (Select one):</text>
 		<logic_check>
 			vx_card = 0 and hib_doses_received_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
 		</logic_check>
@@ -677,7 +823,7 @@ Do you want to proceed with enrollment anyway?</text>
 		<text>On what date was dose 1 of Hib received?</text>
 		<date_range>
 			<min_date>-3y</min_date>
-			<max_date>-4m</max_date>
+			<max_date>0</max_date>
 		</date_range>
 		<logic_check>
 			hib_dose1_date &lt; dob; 'Date of vaccination cannot be before date of birth!'
@@ -686,7 +832,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'hib_dose1_date_ver' fieldtype = 'integer'>
-		<text>date dose 1, method of verification</text>
+		<text>Method of verification of dose 1 date</text>
 		<logic_check>
 			vx_card = 0 and hib_dose1_date_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
 		</logic_check>
@@ -736,10 +882,10 @@ Do you want to proceed with enrollment anyway?</text>
 		<text>On what date was dose 2 of Hib received?</text>
 		<date_range>
 			<min_date>-3y</min_date>
-			<max_date>-4m</max_date>
+			<max_date>0</max_date>
 		</date_range>
 		<logic_check>
-			hib_dose2_date &lt; hib_dose1_date; 'Date of dose 2 cannot be before date of dose 1'
+			hib_dose2_date &lt;= hib_dose1_date; 'Date of dose 2 cannot be on or before date of dose 1'
 		</logic_check>
 		<logic_check>
 			hib_dose2_date &lt; dob; 'Date of vaccination cannot be before date of birth!'
@@ -748,7 +894,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'hib_dose2_date_ver' fieldtype = 'integer'>
-		<text>date dose 2, method of verification</text>
+		<text>Method of verification of dose 2 date</text>
 		<logic_check>
 			vx_card = 0 and hib_dose2_date_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
 		</logic_check>
@@ -798,10 +944,10 @@ Do you want to proceed with enrollment anyway?</text>
 		<text>On what date was dose 3 of Hib received?</text>
 		<date_range>
 			<min_date>-3y</min_date>
-			<max_date>-4m</max_date>
+			<max_date>0</max_date>
 		</date_range>
 		<logic_check>
-			hib_dose3_date &lt; hib_dose2_date; 'Date of dose 3 cannot be before date of dose 2'
+			hib_dose3_date &lt;= hib_dose2_date; 'Date of dose 3 cannot be on or before date of dose 2'
 		</logic_check>
 		<logic_check>
 			hib_dose3_date &lt; dob; 'Date of vaccination cannot be before date of birth!'
@@ -810,7 +956,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'hib_dose3_date_ver' fieldtype = 'integer'>
-		<text>date dose 3, method of verification</text>
+		<text>Method of verification of dose 3 date</text>
 		<logic_check>
 			vx_card = 0 and hib_dose3_date_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
 		</logic_check>
@@ -865,11 +1011,14 @@ Do you want to proceed with enrollment anyway?</text>
 
 	<question type = 'radio' fieldname = 'bednettwoweeks' fieldtype = 'integer'>
 		<text>In the past two weeks, how many nights did [[participantsname]] sleep under a bednet?</text>
+		<logic_check>
+			bednetlastnight = 1 and bednettwoweeks = 0; 'You cannot select 0 nights when the participant slept under a net last night!'
+		</logic_check>
 		<responses>
-			<response value = '1'>14 nights</response>
+			<response value = '0'>0 nights</response>
+			<response value = '1'>More than 1 and less than 7</response>
 			<response value = '2'>More than 7 but less than 14</response>
-			<response value = '3'>More than 1 and less than 7</response>
-			<response value = '4'>0</response>
+			<response value = '3'>14 nights</response>
 		</responses>
 	</question>
 
@@ -884,7 +1033,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'prevdiag_when' fieldtype = 'integer'>
-		<text>When was your most recent diagnosis (excluding this visit)?</text>
+		<text>When was [[participantsname]]'s most recent diagnosis (excluding if positive this visit)?</text>
 		<responses>
 			<response value = '1'>Within last month (30 days)</response>
 			<response value = '2'>More than 30 days ago but within last 6 months</response>
@@ -910,7 +1059,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'prevdiag_al' fieldtype = 'integer'>
-		<text>Was AL prescribed and taken?</text>
+		<text>Was AL (coartem) prescribed and taken?</text>
 		<responses>
 			<response value = '1'>Yes</response>
 			<response value = '0'>No</response>
@@ -958,7 +1107,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'text' fieldname = 'uid' fieldtype = 'text'>
-		<text>Enter the UID from the barcode on  the register (5 digits)</text>
+		<text>Enter the UID from the REGISTER barcode  (5 digits)</text>
 		<maxCharacters>=5</maxCharacters>
 		<unique_check>
 			<message>This UID as already been used!</message>
@@ -967,7 +1116,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'text' fieldname = 'uid2' fieldtype = 'text'>
-		<text>Please re-nter the UID from the barcode on  the register (5 digits)</text>
+		<text>Please re-nter the UID from the REGISTER barcode (5 digits)</text>
 		<maxCharacters>=5</maxCharacters>
 		<logic_check>
 			uid2 &lt;&gt; uid; 'This does not match your previous entry of the UID!'
@@ -976,8 +1125,9 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'text' fieldname = 'fpbarcode1_r21' fieldtype = 'text'>
-		<text>Barcode for R21</text>
+		<text>Enter R21 STUDY barcode</text>
 		<maxCharacters>=12</maxCharacters>
+		<mask value="R21-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
 		<unique_check>
 			<message>This barcode has already been used!</message>
 		</unique_check>
@@ -985,8 +1135,9 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'text' fieldname = 'fpbarcode2_r21' fieldtype = 'text'>
-		<text>Re-enter Barcode for R21</text>
+		<text>Re-enter R21 STUDY barcode</text>
 		<maxCharacters>=12</maxCharacters>
+		<mask value="R21-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
 		<logic_check>
 			fpbarcode2_r21 &lt;&gt; fpbarcode1_r21; 'This does not match your previous entry of the barcode!'
 		</logic_check>
@@ -1003,7 +1154,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'text' fieldname = 'fpbarcode1_immrse' fieldtype = 'text'>
-		<text>Barcode for IMMRSE</text>
+		<text>Enter IMMRSE barcode</text>
 		<maxCharacters>=14</maxCharacters>
 		<unique_check>
 			<message>This barcode has already been used!</message>
@@ -1015,7 +1166,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'text' fieldname = 'fpbarcode2_immrse' fieldtype = 'text'>
-		<text>Re-enter Barcode for IMMRSE</text>
+		<text>Re-enter IMMRSE barcode</text>
 		<maxCharacters>=14</maxCharacters>
 		<logic_check>
 			fpbarcode2_immrse &lt;&gt; fpbarcode1_immrse; 'This does not match your previous entry of the barcode!'

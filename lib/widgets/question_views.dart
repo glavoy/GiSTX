@@ -21,6 +21,126 @@ class UpperCaseTextFormatter extends TextInputFormatter {
   }
 }
 
+/// Custom TextInputFormatter that applies a mask (e.g., "R21-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]")
+class MaskedTextInputFormatter extends TextInputFormatter {
+  final String mask;
+  late final List<_MaskSlot> _slots;
+
+  MaskedTextInputFormatter({required this.mask}) {
+    _slots = _parseMaskToSlots(mask);
+  }
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (mask.isEmpty) return newValue;
+
+    var text = newValue.text.toUpperCase();
+    final prefix = getInitialPrefix(mask);
+
+    // 1. Prevent deleting fixed prefix
+    if (text.length < prefix.length &&
+        newValue.text.length < oldValue.text.length) {
+      return TextEditingValue(
+        text: prefix,
+        selection: TextSelection.collapsed(offset: prefix.length),
+      );
+    }
+
+    // 2. Backspace Logic: If user deletes a literal, also delete the preceding placeholder
+    if (newValue.text.length < oldValue.text.length &&
+        newValue.selection.end < oldValue.text.length) {
+      final deletedChar = oldValue.text[newValue.selection.end];
+      // Check if the character being deleted is a literal in the mask at that position
+      if (newValue.selection.end < _slots.length) {
+        final slot = _slots[newValue.selection.end];
+        if (slot.literal != null && slot.literal == deletedChar) {
+          // It's a literal! Strip one more character from the end to "jump" it
+          if (text.isNotEmpty) {
+            text = text.substring(0, text.length - 1);
+          }
+        }
+      }
+    }
+
+    final buffer = StringBuffer();
+    int textIdx = 0;
+
+    for (final slot in _slots) {
+      if (textIdx >= text.length) {
+        // Auto-fill following literals
+        if (slot.literal != null) {
+          buffer.write(slot.literal);
+        } else {
+          break;
+        }
+      } else {
+        if (slot.placeholder != null) {
+          // Find next valid char from text that matches placeholder regex
+          while (textIdx < text.length &&
+              !slot.placeholder!.hasMatch(text[textIdx])) {
+            textIdx++;
+          }
+          if (textIdx < text.length) {
+            buffer.write(text[textIdx]);
+            textIdx++;
+          } else {
+            break;
+          }
+        } else {
+          // It's a literal slot
+          buffer.write(slot.literal);
+          if (textIdx < text.length && text[textIdx] == slot.literal) {
+            textIdx++;
+          }
+        }
+      }
+    }
+
+    final result = buffer.toString();
+    return TextEditingValue(
+      text: result,
+      selection: TextSelection.collapsed(offset: result.length),
+    );
+  }
+
+  static List<_MaskSlot> _parseMaskToSlots(String mask) {
+    final slots = <_MaskSlot>[];
+    final regex = RegExp(r'\[([^\]]+)\]|([^\[]+)');
+    final matches = regex.allMatches(mask);
+
+    for (final m in matches) {
+      if (m.group(1) != null) {
+        // Placeholder, e.g., [0-9]
+        slots.add(_MaskSlot(placeholder: RegExp(m.group(0)!)));
+      } else {
+        // Literal, e.g., "R21-"
+        final literal = m.group(2)!;
+        for (int i = 0; i < literal.length; i++) {
+          slots.add(_MaskSlot(literal: literal[i]));
+        }
+      }
+    }
+    return slots;
+  }
+
+  static String getInitialPrefix(String mask) {
+    final slots = _parseMaskToSlots(mask);
+    final buffer = StringBuffer();
+    for (final slot in slots) {
+      if (slot.placeholder != null) break;
+      buffer.write(slot.literal);
+    }
+    return buffer.toString();
+  }
+}
+
+class _MaskSlot {
+  final String? literal;
+  final RegExp? placeholder;
+  _MaskSlot({this.literal, this.placeholder});
+}
+
 class QuestionView extends StatefulWidget {
   final Question question;
   final AnswerMap answers; // shared map so we can restore / persist answers
@@ -76,6 +196,11 @@ class _QuestionViewState extends State<QuestionView> {
       if (int.tryParse(initialText) != null) {
         initialText = initialText.padLeft(q.maxCharacters!, '0');
       }
+    }
+
+    // If there's a mask and it's a new record, initialize with prefix
+    if (q.type == QuestionType.text && initialText.isEmpty && q.mask != null) {
+      initialText = MaskedTextInputFormatter.getInitialPrefix(q.mask!);
     }
 
     _textFocusNode = FocusNode();
@@ -281,24 +406,54 @@ class _QuestionViewState extends State<QuestionView> {
     final display = q.text != null
         ? SurveyLoader.expandPlaceholders(q.text!, widget.answers)
         : '';
+    final isWarning = SurveyLoader.isWarning(display);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if ((q.text ?? '').isNotEmpty) _buildSectionTitle('Information'),
+        if ((q.text ?? '').isNotEmpty)
+          _buildSectionTitle(isWarning ? 'Warning' : 'Information'),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isWarning
+                ? (Theme.of(context).brightness == Brightness.dark
+                    ? Colors.amber.shade900.withValues(alpha: 0.2)
+                    : Colors.amber.shade50)
+                : Colors.white,
+            border: isWarning
+                ? Border.all(color: Colors.amber.shade400, width: 2)
+                : null,
             borderRadius: BorderRadius.circular(12),
           ),
           padding: const EdgeInsets.all(14),
-          child: Text(
-            display,
-            style: TextStyle(
-              fontSize: 16,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.black87
-                  : null,
-            ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isWarning) ...[
+                Icon(Icons.warning_amber_rounded,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.amber.shade200
+                        : Colors.amber.shade900,
+                    size: 28),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Text(
+                  display,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: isWarning ? FontWeight.bold : null,
+                    color: isWarning
+                        ? (Theme.of(context).brightness == Brightness.dark
+                            ? Colors.amber.shade100
+                            : Colors.amber.shade900)
+                        : (Theme.of(context).brightness == Brightness.dark
+                            ? Colors.black87
+                            : null),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -314,8 +469,12 @@ class _QuestionViewState extends State<QuestionView> {
     if (isIntegerField) {
       formatters.add(FilteringTextInputFormatter.digitsOnly);
     } else {
-      // For non-integer fields, convert text to uppercase
-      formatters.add(UpperCaseTextFormatter());
+      if (q.mask != null) {
+        formatters.add(MaskedTextInputFormatter(mask: q.mask!));
+      } else {
+        // For non-integer fields, convert text to uppercase
+        formatters.add(UpperCaseTextFormatter());
+      }
     }
 
     return Column(
@@ -394,53 +553,52 @@ class _QuestionViewState extends State<QuestionView> {
             widget.onAnswerChanged?.call();
           },
           child: Column(
-            children: options
-                .map(
-                  (opt) {
-                    // Check if this is a special response option
-                    final isDontKnow = q.dontKnow != null && opt.value == q.dontKnow;
-                    final isRefuse = q.refuse != null && opt.value == q.refuse;
-                    final isSpecial = isDontKnow || isRefuse;
+            children: options.map(
+              (opt) {
+                // Check if this is a special response option
+                final isDontKnow =
+                    q.dontKnow != null && opt.value == q.dontKnow;
+                final isRefuse = q.refuse != null && opt.value == q.refuse;
+                final isSpecial = isDontKnow || isRefuse;
 
-                    final radioTile = AppRadioTheme(
-                      child: Builder(
-                        builder: (context) => RadioListTile<String>(
-                          value: opt.value,
-                          title: Text(
-                            opt.label,
-                            style: TextStyle(
-                              color: Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.black87
-                                  : null,
-                            ),
-                          ),
-                          dense: true,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          tileColor: isSpecial
-                              ? (isDontKnow
-                                  ? Colors.orange.shade100
-                                  : Colors.red.shade100)
-                              : Colors.white,
+                final radioTile = AppRadioTheme(
+                  child: Builder(
+                    builder: (context) => RadioListTile<String>(
+                      value: opt.value,
+                      title: Text(
+                        opt.label,
+                        style: TextStyle(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.black87
+                              : null,
                         ),
                       ),
-                    );
+                      dense: true,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      tileColor: isSpecial
+                          ? (isDontKnow
+                              ? Colors.orange.shade100
+                              : Colors.red.shade100)
+                          : Colors.white,
+                    ),
+                  ),
+                );
 
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: isSpecial
-                          ? Align(
-                              alignment: Alignment.centerLeft,
-                              child: FractionallySizedBox(
-                                widthFactor: 0.5,
-                                child: radioTile,
-                              ),
-                            )
-                          : radioTile,
-                    );
-                  },
-                )
-                .toList(),
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: isSpecial
+                      ? Align(
+                          alignment: Alignment.centerLeft,
+                          child: FractionallySizedBox(
+                            widthFactor: 0.5,
+                            child: radioTile,
+                          ),
+                        )
+                      : radioTile,
+                );
+              },
+            ).toList(),
           ),
         ),
       ],
@@ -490,7 +648,8 @@ class _QuestionViewState extends State<QuestionView> {
                 '  Option ${opt.value} (${opt.label}): checked=$checked');
 
             // Check if this is a special response option
-            final isDontKnow = dontKnowValue != null && opt.value == dontKnowValue;
+            final isDontKnow =
+                dontKnowValue != null && opt.value == dontKnowValue;
             final isRefuse = refuseValue != null && opt.value == refuseValue;
             final isSpecial = isDontKnow || isRefuse;
 
@@ -509,41 +668,39 @@ class _QuestionViewState extends State<QuestionView> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
               tileColor: isSpecial
-                  ? (isDontKnow
-                      ? Colors.orange.shade100
-                      : Colors.red.shade100)
+                  ? (isDontKnow ? Colors.orange.shade100 : Colors.red.shade100)
                   : Colors.white,
               onChanged: (val) {
-                  setState(() {
-                    // Check if this is a special option (don't know, refuse, not in list)
-                    final isSpecial = opt.value == dontKnowValue ||
-                        opt.value == refuseValue ||
-                        opt.value == notInListValue;
+                setState(() {
+                  // Check if this is a special option (don't know, refuse, not in list)
+                  final isSpecial = opt.value == dontKnowValue ||
+                      opt.value == refuseValue ||
+                      opt.value == notInListValue;
 
-                    if (val == true) {
-                      if (isSpecial) {
-                        // If selecting a special option, clear everything else
-                        _checkboxSelection.clear();
-                        _checkboxSelection.add(opt.value);
-                      } else {
-                        // If selecting a normal option, remove any special options
-                        if (dontKnowValue != null)
-                          _checkboxSelection.remove(dontKnowValue);
-                        if (refuseValue != null)
-                          _checkboxSelection.remove(refuseValue);
-                        if (notInListValue != null)
-                          _checkboxSelection.remove(notInListValue);
-                        _checkboxSelection.add(opt.value);
-                      }
+                  if (val == true) {
+                    if (isSpecial) {
+                      // If selecting a special option, clear everything else
+                      _checkboxSelection.clear();
+                      _checkboxSelection.add(opt.value);
                     } else {
-                      // Deselecting is always allowed
-                      _checkboxSelection.remove(opt.value);
+                      // If selecting a normal option, remove any special options
+                      if (dontKnowValue != null)
+                        _checkboxSelection.remove(dontKnowValue);
+                      if (refuseValue != null)
+                        _checkboxSelection.remove(refuseValue);
+                      if (notInListValue != null)
+                        _checkboxSelection.remove(notInListValue);
+                      _checkboxSelection.add(opt.value);
                     }
-                    widget.answers[q.fieldName] = _checkboxSelection.toList();
-                  });
-                  widget.onAnswerChanged?.call();
-                },
-              );
+                  } else {
+                    // Deselecting is always allowed
+                    _checkboxSelection.remove(opt.value);
+                  }
+                  widget.answers[q.fieldName] = _checkboxSelection.toList();
+                });
+                widget.onAnswerChanged?.call();
+              },
+            );
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 4),
