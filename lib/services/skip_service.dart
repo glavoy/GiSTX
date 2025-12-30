@@ -70,10 +70,34 @@ class SkipService {
     switch (op) {
       case '=':
       case '==':
+        final aNum = double.tryParse(actualValue);
+        final cNum = double.tryParse(compareValue);
+        if (aNum != null && cNum != null) {
+          return aNum == cNum;
+        }
+
+        final aDate = DateTime.tryParse(actualValue);
+        final cDate = DateTime.tryParse(compareValue);
+        if (aDate != null && cDate != null) {
+          return aDate.isAtSameMomentAs(cDate);
+        }
+
         return actualValue == compareValue;
 
       case '<>':
       case '!=':
+        final aNum = double.tryParse(actualValue);
+        final cNum = double.tryParse(compareValue);
+        if (aNum != null && cNum != null) {
+          return aNum != cNum;
+        }
+
+        final aDate = DateTime.tryParse(actualValue);
+        final cDate = DateTime.tryParse(compareValue);
+        if (aDate != null && cDate != null) {
+          return !aDate.isAtSameMomentAs(cDate);
+        }
+
         return actualValue != compareValue;
 
       case '<':

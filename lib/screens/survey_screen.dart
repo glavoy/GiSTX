@@ -350,10 +350,20 @@ class _SurveyScreenState extends State<SurveyScreen> {
         if (newValue != oldValue) return true;
       } else {
         if (newValue.toString() != oldValue.toString()) {
+          final s1 = newValue.toString();
+          final s2 = oldValue.toString();
+
+          // Check if they are numeric equivalent (e.g. "04" vs "4")
+          final n1 = num.tryParse(s1);
+          final n2 = num.tryParse(s2);
+          if (n1 != null && n2 != null && n1 == n2) {
+            continue;
+          }
+
           // Check if they are DateTime equivalent (e.g. "2025-12-09 11:22" vs "2025-12-09T11:22")
           try {
-            final d1 = DateTime.tryParse(newValue.toString());
-            final d2 = DateTime.tryParse(oldValue.toString());
+            final d1 = DateTime.tryParse(s1);
+            final d2 = DateTime.tryParse(s2);
             if (d1 != null && d2 != null && d1.isAtSameMomentAs(d2)) {
               continue; // Same moment in time
             }
@@ -414,8 +424,31 @@ class _SurveyScreenState extends State<SurveyScreen> {
   }
 
   /// Called whenever an answer changes
-  void _onAnswerChanged() {
+  void _onAnswerChanged(String fieldName, dynamic oldValue, dynamic newValue) {
     if (_loadedQuestions == null || !mounted) return;
+
+    // Check if it's a "logical" change (numeric-aware)
+    if (oldValue != null && newValue != null) {
+      final s1 = oldValue.toString();
+      final s2 = newValue.toString();
+      if (s1 == s2) return; // Exact match, no change
+
+      final n1 = num.tryParse(s1);
+      final n2 = num.tryParse(s2);
+      if (n1 != null && n2 != null && n1 == n2) {
+        // Numeric equivalent, ignore as a change for cascade clearing
+        debugPrint(
+            '[SurveyScreen] Ignoring padding-only change for $fieldName: "$s1" -> "$s2"');
+        // Still update logic checks for the current question
+        setState(() {
+          final q = _loadedQuestions![_currentQuestion];
+          _logicError = LogicService.evaluateLogicChecks(q, _answers);
+        });
+        return;
+      }
+    }
+
+    _clearDependents(fieldName);
 
     setState(() {
       final q = _loadedQuestions![_currentQuestion];
@@ -498,6 +531,30 @@ class _SurveyScreenState extends State<SurveyScreen> {
         ],
       ),
     );
+  }
+
+  /// Recursively clear any fields that depend on the changed field
+  void _clearDependents(String fieldName) {
+    if (_loadedQuestions == null) return;
+
+    final clearedNow = <String>[];
+
+    for (final q in _loadedQuestions!) {
+      if (q.fieldName == fieldName) continue;
+
+      if (q.dependsOn(fieldName)) {
+        if (_answers[q.fieldName] != null) {
+          debugPrint('Cascade clearing ${q.fieldName} (depends on $fieldName)');
+          _answers[q.fieldName] = null;
+          clearedNow.add(q.fieldName);
+        }
+      }
+    }
+
+    // Recursively clear dependents of the fields we just cleared
+    for (final childField in clearedNow) {
+      _clearDependents(childField);
+    }
   }
 
   /// Navigate to the next question, auto-skipping automatic questions
@@ -1146,7 +1203,10 @@ class _SurveyScreenState extends State<SurveyScreen> {
                                     key: ValueKey('view_${q.fieldName}'),
                                     question: q,
                                     answers: _answers,
-                                    onAnswerChanged: () => _onAnswerChanged(),
+                                    onAnswerChanged:
+                                        (fieldName, oldVal, newVal) =>
+                                            _onAnswerChanged(
+                                                fieldName, oldVal, newVal),
                                     onRequestNext: () => _next(questions),
                                     isEditMode: widget.uniqueId != null,
                                     logicError: _logicError,
@@ -1261,11 +1321,18 @@ class _SurveyScreenState extends State<SurveyScreen> {
     if (_loadedQuestions != null) {
       for (final q in _loadedQuestions!) {
         final val = answersToSave[q.fieldName];
-        // Enforce ISO8601 format for date/datetime fields
-        if (val != null &&
-            (q.type == QuestionType.date || q.type == QuestionType.datetime)) {
+        if (val == null) continue;
+
+        if (q.type == QuestionType.date) {
           final valStr = val.toString();
-          // If it looks like it might be space-separated or non-ISO, fix it
+          try {
+            final dt = DateTime.tryParse(valStr);
+            if (dt != null) {
+              answersToSave[q.fieldName] = dt.toIso8601String().split('T')[0];
+            }
+          } catch (_) {}
+        } else if (q.type == QuestionType.datetime) {
+          final valStr = val.toString();
           try {
             final dt = DateTime.tryParse(valStr);
             if (dt != null) {

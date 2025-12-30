@@ -26,7 +26,7 @@
     - [x] for malaria vaccine the dates it is possible to receive it shoud be march 1 2025 through to today
     - [x] for hib vaccine it can be from brith through to today - need to chang ethe way dates max/min
 - If I change BUSIA to MAYUGE, it should autoclear the subcounty, parish, and village so I have to reselect at each level below the change. Instead it autoselects from the list
-    - [ ] change this behaviour in GiSTX app
+    - [x] change this behaviour in GiSTX app
 
 ### From email
 - The upper limit sounds good, though we need it to be set relative to the child being under 1 as of April 1 2025.
@@ -52,10 +52,10 @@
 - Malaria vaccine cannot be before March 1, 2025 - and allows date up until today
 - HiB vaccine date range is from DOB up until today
 - bednettwoweeks: added logic check such that user cannot select 0 nights when the previous question was 'Yes' - participant slept under a net last night
-- added a 'regex' style formatting to the barcodes
+- Added a 'regex' style formatting to the barcodes - user does not have to type in 'R21-' and subsequent '-'
 - When viewing dropdown of completed surveys (when viewing/modifying a survey) it now shows subid + date enrolled + name
 - When you exit a survey that you are modiying, changed the text to: "Are you sure you want to cancel. All edits/modifications will be lost!" 
-- 
+- When changing the district, e.g. BUSIA to MAYUGE, it clears the subcounty, parish, and village. This cascades - if the subcounty is changed, the parish is also cleared, etc.
 
 
 

@@ -191,4 +191,58 @@ class Question {
     this.calculation,
     this.mask,
   });
+
+  /// Check if this question depends on another field (via filters, calculations, or logic)
+  bool dependsOn(String fieldName) {
+    final pattern = '[[$fieldName]]';
+
+    // 1. Check response filters
+    if (responseConfig != null) {
+      for (final filter in responseConfig!.filters) {
+        if (filter.value == pattern) return true;
+      }
+    }
+
+    // 2. Check calculation
+    if (calculation != null && _calculationDependsOn(calculation!, fieldName)) {
+      return true;
+    }
+
+    // 3. Check logic checks
+    for (final lc in logicChecks) {
+      if (lc.condition.contains(fieldName)) return true;
+    }
+
+    // 4. Check skips (if we ever want to clear based on skip dependency)
+    // For now, we mainly care about data dependencies
+
+    return false;
+  }
+
+  bool _calculationDependsOn(CalculationConfig config, String fieldName) {
+    if (config.field == fieldName) return true;
+    if (config.sql?.contains('[[$fieldName]]') ?? false) return true;
+    if (config.sqlParams?.values.contains(fieldName) ?? false) return true;
+
+    if (config.parts != null) {
+      for (final part in config.parts!) {
+        if (_calculationDependsOn(part, fieldName)) return true;
+      }
+    }
+
+    if (config.cases != null) {
+      for (final c in config.cases!) {
+        if (c.field == fieldName ||
+            _calculationDependsOn(c.result, fieldName)) {
+          return true;
+        }
+      }
+      if (config.defaultValue != null &&
+          _calculationDependsOn(config.defaultValue!, fieldName)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
 }

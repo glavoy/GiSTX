@@ -28,6 +28,10 @@
 	</question>
 
 
+	<question type = 'automatic' fieldname = 'subjid' fieldtype = 'text'>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'district' fieldtype = 'integer'>
 		<text>District of residence of enrollee</text>
 		<responses>
@@ -113,12 +117,8 @@ Do you want to proceed anyway?</text>
 		<text>Enter the participants district, subcounty, parish and village of residence</text>
 		<maxCharacters>255</maxCharacters>
 		<preskip>
-			<skip fieldname='district' condition = '&lt;&gt;' response='999' response_type='fixed' skiptofieldname ='subjid'></skip>
+			<skip fieldname='district' condition = '&lt;&gt;' response='999' response_type='fixed' skiptofieldname ='dob'></skip>
 		</preskip>
-	</question>
-
-
-	<question type = 'automatic' fieldname = 'subjid' fieldtype = 'text'>
 	</question>
 
 
