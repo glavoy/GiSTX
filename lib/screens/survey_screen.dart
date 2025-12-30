@@ -755,7 +755,8 @@ class _SurveyScreenState extends State<SurveyScreen> {
     final isIdField = !AutoFields.getRegistry().containsKey(q.fieldName) &&
         q.calculation == null;
 
-    debugPrint('[ProcessingAuto] ${q.fieldName} isIdField=$isIdField hasCalculation=${q.calculation != null}');
+    debugPrint(
+        '[ProcessingAuto] ${q.fieldName} isIdField=$isIdField hasCalculation=${q.calculation != null}');
     if (q.fieldName == 'hhid') {
       debugPrint(
           '[ProcessingAuto] hhid components: vcode=${_answers['vcode']}, mrccode=${_answers['mrccode']}, hhnum=${_answers['hhnum']}');
@@ -780,7 +781,10 @@ class _SurveyScreenState extends State<SurveyScreen> {
             final existingId = _answers[q.fieldName]?.toString();
             final isEditMode = widget.uniqueId != null;
 
-            if (isEditMode && existingId != null && existingId.isNotEmpty && existingId != '-9') {
+            if (isEditMode &&
+                existingId != null &&
+                existingId.isNotEmpty &&
+                existingId != '-9') {
               // Check if the base ID components have changed
               final hasChanged = IdGenerator.hasBaseIdChanged(
                 existingId: existingId,
@@ -958,7 +962,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
                   builder: (_) => AlertDialog(
                     title: const Text('Cancel Interview'),
                     content: const Text(
-                        'Are you sure you want to cancel the interview? \n\nAll data will be lost!'),
+                        'Are you sure you want to cancel the interview? \n\nAll edits/modifications will be lost!'),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(),
@@ -1019,14 +1023,63 @@ class _SurveyScreenState extends State<SurveyScreen> {
                       // Question text (fixed at top)
                       if ((q.text ?? '').isNotEmpty &&
                           q.type != QuestionType.information)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            SurveyLoader.expandPlaceholders(q.text!, _answers),
-                            style: const TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.w600),
-                          ),
-                        ),
+                        Builder(builder: (context) {
+                          final expandedText = SurveyLoader.expandPlaceholders(
+                              q.text!, _answers);
+                          final isWarning =
+                              SurveyLoader.isWarning(expandedText);
+
+                          if (isWarning) {
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.amber.shade900
+                                        .withValues(alpha: 0.2)
+                                    : Colors.amber.shade50,
+                                border: Border.all(
+                                    color: Colors.amber.shade400, width: 2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(Icons.warning_amber_rounded,
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.amber.shade200
+                                          : Colors.amber.shade900,
+                                      size: 28),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      expandedText,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? Colors.amber.shade100
+                                            : Colors.amber.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              expandedText,
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.w600),
+                            ),
+                          );
+                        }),
 
                       // Error display (fixed below question text) - shows only ONE error at a time
                       if (_logicError != null)

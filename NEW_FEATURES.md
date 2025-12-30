@@ -6,6 +6,7 @@
 - added 'unique' logic check - do not allow duplicate records for this field
 - app checks for new crf's and also checks for new fields - it adds everything to the database.
 - added 'repeat' subsections to questionnaires
+- added input masking for text questions (e.g., `<mask value="R21-###-****" />`)
 
 
 ### Instructions

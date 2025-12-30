@@ -32,6 +32,7 @@ class AutoFields {
   static final Map<String, AutoFieldFn> _registry = {
     'uniqueid': _computeUniqueId,
     'starttime': _computeStartTime,
+    'startdate': _computeStartDate,
     'stoptime': _computeStopTime,
     'lastmod': _computeLastModified,
     'swver': _computeSoftwareVersion,
@@ -61,6 +62,7 @@ class AutoFields {
 
     // Debug logging for preservation logic
     if (key == 'starttime' ||
+        key == 'startdate' ||
         key == 'stoptime' ||
         key == 'uniqueid' ||
         key == 'intnum' ||
@@ -78,7 +80,10 @@ class AutoFields {
 
     if (isEditMode && hasValue) {
       // Preserve these special system fields in edit mode
-      if (key == 'uniqueid' || key == 'starttime' || key == 'stoptime') {
+      if (key == 'uniqueid' ||
+          key == 'starttime' ||
+          key == 'startdate' ||
+          key == 'stoptime') {
         if (existing is DateTime) return existing.toIso8601String();
         return existing.toString();
       }
@@ -285,6 +290,49 @@ class AutoFields {
         case 'age_at_date':
           return _calculateAgeAtDate(config, answers);
 
+        case 'date_offset':
+          final field = _sanitizeField(config.field);
+          if (field == null) return '';
+          final baseVal = answers[field]?.toString() ?? '';
+          if (baseVal.isEmpty) return '';
+
+          final baseDate = DateTime.tryParse(baseVal);
+          if (baseDate == null) return '';
+
+          final offsetStr = config.value ?? '';
+          final resultDate = _applyDateOffset(baseDate, offsetStr);
+          return resultDate.toIso8601String().split('T')[0];
+
+        case 'date_diff':
+          final startFieldName = _sanitizeField(config.field);
+          final endFieldName = _sanitizeField(config.value);
+
+          DateTime? startDate;
+          DateTime? endDate;
+
+          // Parse start date
+          if (startFieldName == 'today') {
+            final now = DateTime.now();
+            startDate = DateTime(now.year, now.month, now.day);
+          } else if (startFieldName != null) {
+            final val = answers[startFieldName]?.toString() ?? '';
+            if (val.isNotEmpty) startDate = DateTime.tryParse(val);
+          }
+
+          // Parse end date
+          if (endFieldName == 'today') {
+            final now = DateTime.now();
+            endDate = DateTime(now.year, now.month, now.day);
+          } else if (endFieldName != null) {
+            final val = answers[endFieldName]?.toString() ?? '';
+            if (val.isNotEmpty) endDate = DateTime.tryParse(val);
+          }
+
+          if (startDate == null || endDate == null) return '';
+
+          return _calculateDateDiff(startDate, endDate, config.unit ?? 'd')
+              .toString();
+
         default:
           return '';
       }
@@ -421,6 +469,12 @@ class AutoFields {
     return DateTime.now().toIso8601String();
   }
 
+  static String _computeStartDate(
+      AnswerMap answers, Question q, bool isEditMode, String? surveyId) {
+    // In edit mode, preserve existing startdate (handled in compute method)
+    return DateTime.now().toIso8601String().split('T')[0];
+  }
+
   static String _computeStopTime(
       AnswerMap answers, Question q, bool isEditMode, String? surveyId) {
     // Same idea as starttime: when this automatic question is *shown*,
@@ -462,6 +516,71 @@ class AutoFields {
 
   static void _touchLastMod(AnswerMap answers) {
     answers['lastmod'] = DateTime.now().toIso8601String();
+  }
+
+  static int _calculateDateDiff(
+      DateTime fromDate, DateTime toDate, String unit) {
+    if (unit == 'd') {
+      return toDate.difference(fromDate).inDays;
+    }
+    if (unit == 'w') {
+      return toDate.difference(fromDate).inDays ~/ 7;
+    }
+
+    int years = toDate.year - fromDate.year;
+    int months = toDate.month - fromDate.month;
+
+    // Adjust for birthday/day-of-month
+    if (toDate.day < fromDate.day) {
+      months--;
+    }
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    if (unit == 'y') return years;
+    if (unit == 'm') return years * 12 + months;
+
+    return toDate.difference(fromDate).inDays;
+  }
+
+  static DateTime _applyDateOffset(DateTime baseDate, String offsetStr) {
+    if (offsetStr.isEmpty) return baseDate;
+
+    // Normalize to date (midnight)
+    final base = DateTime(baseDate.year, baseDate.month, baseDate.day);
+    final relativePattern = RegExp(r'^([+-]?\d+)([ymwd])$');
+    final match = relativePattern.firstMatch(offsetStr);
+
+    if (match != null) {
+      final value = int.tryParse(match.group(1)!);
+      final unit = match.group(2)!;
+
+      if (value != null) {
+        switch (unit) {
+          case 'y': // years
+            return DateTime(base.year + value, base.month, base.day);
+          case 'm': // months
+            int newMonth = base.month + value;
+            int newYear = base.year;
+            while (newMonth > 12) {
+              newMonth -= 12;
+              newYear++;
+            }
+            while (newMonth < 1) {
+              newMonth += 12;
+              newYear--;
+            }
+            return DateTime(newYear, newMonth, base.day);
+          case 'w': // weeks
+            return base.add(Duration(days: value * 7));
+          case 'd': // days
+            return base.add(Duration(days: value));
+        }
+      }
+    }
+    return base;
   }
 
   // ---------- Default/fallbacks ----------
