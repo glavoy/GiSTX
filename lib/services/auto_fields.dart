@@ -246,10 +246,22 @@ class AutoFields {
 
               switch (c.operator) {
                 case '=':
-                  match = val == c.value;
+                  final v1 = double.tryParse(val);
+                  final v2 = double.tryParse(c.value);
+                  if (v1 != null && v2 != null) {
+                    match = v1 == v2;
+                  } else {
+                    match = val == c.value;
+                  }
                   break;
                 case '!=':
-                  match = val != c.value;
+                  final v1 = double.tryParse(val);
+                  final v2 = double.tryParse(c.value);
+                  if (v1 != null && v2 != null) {
+                    match = v1 != v2;
+                  } else {
+                    match = val != c.value;
+                  }
                   break;
                 case '>':
                   final v1 = double.tryParse(val);

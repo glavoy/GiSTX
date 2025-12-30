@@ -19,7 +19,8 @@ class DatabaseResponseService {
     final valueColumn = config.valueColumn ?? config.displayColumn ?? '';
 
     if (displayColumn.isEmpty || valueColumn.isEmpty) {
-      throw Exception('display and value columns must be specified for database source');
+      throw Exception(
+          'display and value columns must be specified for database source');
     }
 
     // Build WHERE clause from filters
@@ -27,16 +28,26 @@ class DatabaseResponseService {
     final whereArgs = <dynamic>[];
 
     for (final filter in config.filters) {
-      var filterValue = filter.value;
-
       // Expand placeholders in filter value (e.g., [[region]])
-      filterValue = _expandPlaceholders(filterValue, answers);
+      final filterValue = _expandPlaceholders(filter.value, answers);
 
-      whereClauses.add('${filter.column} ${filter.operator} ?');
+      // Build WHERE clause from filters
+      // Use CAST for numeric comparison if the filter value looks like a number
+      // this handles padding differences (e.g., '04' matching '4')
+      if (num.tryParse(filterValue) != null &&
+          (filter.operator == '=' ||
+              filter.operator == '!=' ||
+              filter.operator == '<>')) {
+        whereClauses.add(
+            'CAST(${filter.column} AS INTEGER) ${filter.operator} CAST(? AS INTEGER)');
+      } else {
+        whereClauses.add('${filter.column} ${filter.operator} ?');
+      }
       whereArgs.add(filterValue);
     }
 
-    final whereClause = whereClauses.isNotEmpty ? whereClauses.join(' AND ') : null;
+    final whereClause =
+        whereClauses.isNotEmpty ? whereClauses.join(' AND ') : null;
 
     // Build query with DISTINCT if needed
     String query;
@@ -79,7 +90,8 @@ class DatabaseResponseService {
   }
 
   /// Expand placeholders like [[region]] with actual values
-  static String _expandPlaceholders(String template, Map<String, dynamic> answers) {
+  static String _expandPlaceholders(
+      String template, Map<String, dynamic> answers) {
     return template.replaceAllMapped(RegExp(r'\[\[(.+?)\]\]'), (m) {
       final key = m.group(1)!;
       final val = answers[key];

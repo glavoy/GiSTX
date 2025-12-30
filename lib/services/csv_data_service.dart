@@ -48,12 +48,14 @@ class CsvDataService {
   }
 
   /// Load all CSV files referenced in questions
-  Future<void> loadAllCsvFiles(String surveyDirectory, List<Question> questions) async {
+  Future<void> loadAllCsvFiles(
+      String surveyDirectory, List<Question> questions) async {
     final csvFiles = <String>{};
 
     // Collect all unique CSV filenames
     for (final q in questions) {
-      if (q.responseConfig?.source == ResponseSource.csv && q.responseConfig?.file != null) {
+      if (q.responseConfig?.source == ResponseSource.csv &&
+          q.responseConfig?.file != null) {
         csvFiles.add(q.responseConfig!.file!);
       }
     }
@@ -86,11 +88,15 @@ class CsvDataService {
       var filterValue = filter.value;
 
       // Expand placeholders in filter value (e.g., [[region]])
-      final originalFilterValue = filterValue;
       filterValue = _expandPlaceholders(filterValue, answers);
 
-      debugPrint('[CsvDataService] Applying filter: $column ${filter.operator} "$filterValue" (from "$originalFilterValue")');
-      debugPrint('[CsvDataService]   Before filter: ${data.length} rows');
+      debugPrint(
+          '[CsvDataService]   Headers: ${data.isNotEmpty ? data.first.keys.toList() : "empty"}');
+      if (data.isNotEmpty) {
+        final sampleValues = data.take(5).map((r) => r[column]).toList();
+        debugPrint(
+            '[CsvDataService]   Sample values for "$column": $sampleValues');
+      }
 
       data = data.where((row) {
         final cellValue = row[column] ?? '';
@@ -138,9 +144,11 @@ class CsvDataService {
       ));
     }
 
-    debugPrint('[CsvDataService] Returning ${options.length} options from ${config.file}');
+    debugPrint(
+        '[CsvDataService] Returning ${options.length} options from ${config.file}');
     if (options.isNotEmpty) {
-      debugPrint('[CsvDataService]   Sample: ${options.take(3).map((o) => '${o.value}:${o.label}').join(', ')}${options.length > 3 ? '...' : ''}');
+      debugPrint(
+          '[CsvDataService]   Sample: ${options.take(3).map((o) => '${o.value}:${o.label}').join(', ')}${options.length > 3 ? '...' : ''}');
     }
 
     return options;
@@ -148,6 +156,51 @@ class CsvDataService {
 
   /// Apply comparison operator
   bool _applyOperator(String cellValue, String filterValue, String operator) {
+    // Try numeric comparison first
+    final cellNum = num.tryParse(cellValue);
+    final filterNum = num.tryParse(filterValue);
+    if (cellNum != null && filterNum != null) {
+      switch (operator) {
+        case '=':
+          return cellNum == filterNum;
+        case '!=':
+        case '<>':
+          return cellNum != filterNum;
+        case '>':
+          return cellNum > filterNum;
+        case '<':
+          return cellNum < filterNum;
+        case '>=':
+          return cellNum >= filterNum;
+        case '<=':
+          return cellNum <= filterNum;
+      }
+    }
+
+    // Try date comparison
+    final cellDate = DateTime.tryParse(cellValue);
+    final filterDate = DateTime.tryParse(filterValue);
+    if (cellDate != null && filterDate != null) {
+      switch (operator) {
+        case '=':
+          return cellDate.isAtSameMomentAs(filterDate);
+        case '!=':
+        case '<>':
+          return !cellDate.isAtSameMomentAs(filterDate);
+        case '>':
+          return cellDate.isAfter(filterDate);
+        case '<':
+          return cellDate.isBefore(filterDate);
+        case '>=':
+          return cellDate.isAfter(filterDate) ||
+              cellDate.isAtSameMomentAs(filterDate);
+        case '<=':
+          return cellDate.isBefore(filterDate) ||
+              cellDate.isAtSameMomentAs(filterDate);
+      }
+    }
+
+    // Default to string comparison
     switch (operator) {
       case '=':
         return cellValue == filterValue;
@@ -155,35 +208,15 @@ class CsvDataService {
       case '<>':
         return cellValue != filterValue;
       case '>':
-        final cell = num.tryParse(cellValue);
-        final filter = num.tryParse(filterValue);
-        if (cell != null && filter != null) {
-          return cell > filter;
-        }
         return cellValue.compareTo(filterValue) > 0;
       case '<':
-        final cell = num.tryParse(cellValue);
-        final filter = num.tryParse(filterValue);
-        if (cell != null && filter != null) {
-          return cell < filter;
-        }
         return cellValue.compareTo(filterValue) < 0;
       case '>=':
-        final cell = num.tryParse(cellValue);
-        final filter = num.tryParse(filterValue);
-        if (cell != null && filter != null) {
-          return cell >= filter;
-        }
         return cellValue.compareTo(filterValue) >= 0;
       case '<=':
-        final cell = num.tryParse(cellValue);
-        final filter = num.tryParse(filterValue);
-        if (cell != null && filter != null) {
-          return cell <= filter;
-        }
         return cellValue.compareTo(filterValue) <= 0;
       default:
-        return cellValue == filterValue;
+        return false;
     }
   }
 

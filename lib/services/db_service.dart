@@ -696,6 +696,15 @@ class DbService {
         final newValueStr = _valueToString(newValue);
 
         if (oldValueStr != newValueStr) {
+          // Check for numeric equality (e.g. "4" vs "04")
+          if (oldValueStr != null && newValueStr != null) {
+            final n1 = num.tryParse(oldValueStr);
+            final n2 = num.tryParse(newValueStr);
+            if (n1 != null && n2 != null && n1 == n2) {
+              continue; // Logically the same numeric value
+            }
+          }
+
           await db.insert('formchanges', {
             'tablename': tableName,
             'fieldname': fieldName,

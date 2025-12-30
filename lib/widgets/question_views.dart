@@ -144,7 +144,8 @@ class _MaskSlot {
 class QuestionView extends StatefulWidget {
   final Question question;
   final AnswerMap answers; // shared map so we can restore / persist answers
-  final VoidCallback? onAnswerChanged;
+  final void Function(String fieldName, dynamic oldValue, dynamic newValue)?
+      onAnswerChanged;
   final VoidCallback? onRequestNext; // ask parent to navigate to next question
   final bool isEditMode; // Whether we're editing an existing record
   final String? logicError; // The logic check error message to display
@@ -179,6 +180,19 @@ class _QuestionViewState extends State<QuestionView> {
   final ScrollController _radioScrollController = ScrollController();
   final ScrollController _checkboxScrollController = ScrollController();
 
+  String _normalizeValue(dynamic value) {
+    if (value == null) return '';
+    String s = value.toString();
+    if (widget.question.fixedLength &&
+        widget.question.maxCharacters != null &&
+        s.isNotEmpty) {
+      if (int.tryParse(s) != null) {
+        return s.padLeft(widget.question.maxCharacters!, '0');
+      }
+    }
+    return s;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -188,15 +202,8 @@ class _QuestionViewState extends State<QuestionView> {
     final existing = widget.answers[q.fieldName];
 
     // Handle padding for fixed length numeric fields
-    String initialText = (existing is String) ? existing : '';
+    String initialText = _normalizeValue(existing);
     final originalText = initialText;
-
-    if (q.fixedLength && q.maxCharacters != null && initialText.isNotEmpty) {
-      // Check if it's a valid integer before padding
-      if (int.tryParse(initialText) != null) {
-        initialText = initialText.padLeft(q.maxCharacters!, '0');
-      }
-    }
 
     // If there's a mask and it's a new record, initialize with prefix
     if (q.type == QuestionType.text && initialText.isEmpty && q.mask != null) {
@@ -210,20 +217,24 @@ class _QuestionViewState extends State<QuestionView> {
 
     // If we padded the text, update the source of truth immediately
     if (initialText != originalText) {
+      debugPrint(
+          '[QuestionView] ${q.fieldName} padding triggered: "$originalText" -> "$initialText"');
       widget.answers[q.fieldName] = initialText;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) widget.onAnswerChanged?.call();
+        if (mounted) {
+          widget.onAnswerChanged?.call(q.fieldName, originalText, initialText);
+        }
       });
     }
 
     _checkboxSelection = {
-      if (existing is List) ...existing.map((e) => e.toString()),
+      if (existing is List) ...existing.map((e) => _normalizeValue(e)),
     };
 
     // Convert existing value to string for radio/combobox
     // This ensures consistency with option values from CSV/database
-    _radioSelection = existing != null ? existing.toString() : null;
-    _comboboxSelection = existing != null ? existing.toString() : null;
+    _radioSelection = existing != null ? _normalizeValue(existing) : null;
+    _comboboxSelection = existing != null ? _normalizeValue(existing) : null;
 
     // Handle date/datetime initialization
     if (existing is DateTime) {
@@ -270,9 +281,14 @@ class _QuestionViewState extends State<QuestionView> {
   }
 
   Future<void> _computeAutoValue() async {
-    final val = await AutoFields.compute(widget.answers, widget.question,
+    final rawVal = await AutoFields.compute(widget.answers, widget.question,
         isEditMode: widget.isEditMode, surveyId: widget.surveyId);
     if (mounted) {
+      final val = _normalizeValue(rawVal);
+      final oldVal = widget.answers[widget.question.fieldName]?.toString();
+      final newVal = val;
+      final hasChanged = oldVal != newVal;
+
       setState(() {
         if (widget.question.type == QuestionType.automatic) {
           // For automatic, just update answers
@@ -291,7 +307,12 @@ class _QuestionViewState extends State<QuestionView> {
         // Always update the answers map
         widget.answers[widget.question.fieldName] = val;
       });
-      widget.onAnswerChanged?.call();
+
+      if (hasChanged) {
+        debugPrint(
+            '[QuestionView] ${widget.question.fieldName} auto value change: "$oldVal" -> "$newVal"');
+        widget.onAnswerChanged?.call(widget.question.fieldName, oldVal, newVal);
+      }
     }
   }
 
@@ -313,6 +334,15 @@ class _QuestionViewState extends State<QuestionView> {
         );
       }
 
+      // Normalize option values for fixed-length fields
+      options = options.map((opt) {
+        final normalizedValue = _normalizeValue(opt.value);
+        if (normalizedValue != opt.value) {
+          return QuestionOption(value: normalizedValue, label: opt.label);
+        }
+        return opt;
+      }).toList();
+
       if (mounted) {
         setState(() {
           _dynamicOptions = options;
@@ -321,10 +351,17 @@ class _QuestionViewState extends State<QuestionView> {
         // Update answers map if current selection exists in options
         if (_radioSelection != null &&
             options.any((opt) => opt.value == _radioSelection)) {
-          if (widget.answers[widget.question.fieldName] != _radioSelection) {
+          final currentVal =
+              widget.answers[widget.question.fieldName]?.toString();
+          if (currentVal != _radioSelection) {
+            debugPrint(
+                '[QuestionView] ${widget.question.fieldName} dynamic option match but value mismatch: currentVal="$currentVal", _radioSelection="$_radioSelection"');
             widget.answers[widget.question.fieldName] = _radioSelection;
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) widget.onAnswerChanged?.call();
+              if (mounted) {
+                widget.onAnswerChanged?.call(
+                    widget.question.fieldName, currentVal, _radioSelection);
+              }
             });
           }
         }
@@ -347,15 +384,14 @@ class _QuestionViewState extends State<QuestionView> {
       final existing = widget.answers[widget.question.fieldName];
 
       // Reset text field
-      String initialText = (existing is String) ? existing : '';
-      _textController.text = initialText;
+      _textController.text = _normalizeValue(existing);
 
       // Reset radio/checkbox/combobox selections
       // Convert to string to ensure consistency with option values
-      _radioSelection = existing != null ? existing.toString() : null;
-      _comboboxSelection = existing != null ? existing.toString() : null;
+      _radioSelection = existing != null ? _normalizeValue(existing) : null;
+      _comboboxSelection = existing != null ? _normalizeValue(existing) : null;
       _checkboxSelection = {
-        if (existing is List) ...existing.map((e) => e.toString()),
+        if (existing is List) ...existing.map((e) => _normalizeValue(e)),
       };
       // Reset date/datetime
       if (existing is DateTime) {
@@ -497,8 +533,10 @@ class _QuestionViewState extends State<QuestionView> {
             hintText: 'Type your answer',
           ),
           onChanged: (val) {
+            final old = widget.answers[q.fieldName];
+            if (old == val) return;
             widget.answers[q.fieldName] = val;
-            widget.onAnswerChanged?.call();
+            widget.onAnswerChanged?.call(q.fieldName, old, val);
           },
         ),
       ],
@@ -511,14 +549,6 @@ class _QuestionViewState extends State<QuestionView> {
 
     debugPrint(
         '[QuestionView] Building radio for ${q.fieldName}: _radioSelection=$_radioSelection, options.length=${options.length}, _dynamicOptions.length=${_dynamicOptions.length}');
-    if (_radioSelection != null && options.isNotEmpty) {
-      final match = options.firstWhere(
-        (opt) => opt.value == _radioSelection,
-        orElse: () => QuestionOption(value: '', label: ''),
-      );
-      debugPrint(
-          '[QuestionView]   Selection match: ${match.value.isEmpty ? "NOT FOUND" : "FOUND (${match.label})"}');
-    }
 
     // Show empty message if no options and config has empty message
     if (options.isEmpty && q.responseConfig?.emptyMessage != null) {
@@ -543,63 +573,63 @@ class _QuestionViewState extends State<QuestionView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Radio buttons
-        RadioGroup<String>(
-          groupValue: _radioSelection,
-          onChanged: (val) {
-            setState(() {
-              _radioSelection = val;
-              widget.answers[q.fieldName] = val;
-            });
-            widget.onAnswerChanged?.call();
-          },
-          child: Column(
-            children: options.map(
-              (opt) {
-                // Check if this is a special response option
-                final isDontKnow =
-                    q.dontKnow != null && opt.value == q.dontKnow;
-                final isRefuse = q.refuse != null && opt.value == q.refuse;
-                final isSpecial = isDontKnow || isRefuse;
+        Column(
+          children: options.map(
+            (opt) {
+              // Check if this is a special response option
+              final isDontKnow = q.dontKnow != null && opt.value == q.dontKnow;
+              final isRefuse = q.refuse != null && opt.value == q.refuse;
+              final isSpecial = isDontKnow || isRefuse;
 
-                final radioTile = AppRadioTheme(
-                  child: Builder(
-                    builder: (context) => RadioListTile<String>(
-                      value: opt.value,
-                      title: Text(
-                        opt.label,
-                        style: TextStyle(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.black87
-                              : null,
-                        ),
+              final radioTile = AppRadioTheme(
+                child: Builder(
+                  builder: (context) => RadioListTile<String>(
+                    value: opt.value,
+                    groupValue: _radioSelection,
+                    onChanged: (val) {
+                      if (val == null) return;
+                      final old = widget.answers[q.fieldName];
+                      if (old == val) return;
+                      setState(() {
+                        _radioSelection = val;
+                        widget.answers[q.fieldName] = val;
+                      });
+                      widget.onAnswerChanged?.call(q.fieldName, old, val);
+                    },
+                    title: Text(
+                      opt.label,
+                      style: TextStyle(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.black87
+                            : null,
                       ),
-                      dense: true,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      tileColor: isSpecial
-                          ? (isDontKnow
-                              ? Colors.orange.shade100
-                              : Colors.red.shade100)
-                          : Colors.white,
                     ),
+                    dense: true,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    tileColor: isSpecial
+                        ? (isDontKnow
+                            ? Colors.orange.shade100
+                            : Colors.red.shade100)
+                        : Colors.white,
                   ),
-                );
+                ),
+              );
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: isSpecial
-                      ? Align(
-                          alignment: Alignment.centerLeft,
-                          child: FractionallySizedBox(
-                            widthFactor: 0.5,
-                            child: radioTile,
-                          ),
-                        )
-                      : radioTile,
-                );
-              },
-            ).toList(),
-          ),
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: isSpecial
+                    ? Align(
+                        alignment: Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: 0.5,
+                          child: radioTile,
+                        ),
+                      )
+                    : radioTile,
+              );
+            },
+          ).toList(),
         ),
       ],
     );
@@ -671,6 +701,7 @@ class _QuestionViewState extends State<QuestionView> {
                   ? (isDontKnow ? Colors.orange.shade100 : Colors.red.shade100)
                   : Colors.white,
               onChanged: (val) {
+                final oldValues = _checkboxSelection.toList();
                 setState(() {
                   // Check if this is a special option (don't know, refuse, not in list)
                   final isSpecial = opt.value == dontKnowValue ||
@@ -698,7 +729,15 @@ class _QuestionViewState extends State<QuestionView> {
                   }
                   widget.answers[q.fieldName] = _checkboxSelection.toList();
                 });
-                widget.onAnswerChanged?.call();
+
+                final newValues = _checkboxSelection.toList();
+                bool changed = oldValues.length != newValues.length ||
+                    !oldValues.every((v) => newValues.contains(v));
+
+                if (changed) {
+                  widget.onAnswerChanged
+                      ?.call(q.fieldName, oldValues, newValues);
+                }
               },
             );
 
@@ -770,11 +809,13 @@ class _QuestionViewState extends State<QuestionView> {
               );
             }).toList(),
             onChanged: (val) {
+              final old = widget.answers[q.fieldName];
+              if (old == val) return;
               setState(() {
                 _comboboxSelection = val;
                 widget.answers[q.fieldName] = val;
               });
-              widget.onAnswerChanged?.call();
+              widget.onAnswerChanged?.call(q.fieldName, old, val);
             },
           ),
         ),
@@ -827,13 +868,15 @@ class _QuestionViewState extends State<QuestionView> {
               lastDate: lastDate,
             );
             if (picked != null) {
+              final newVal = picked.toIso8601String().split('T')[0];
+              final old = widget.answers[q.fieldName];
+              if (old == newVal) return;
               setState(() {
                 _selectedDate = picked;
                 // For 'date' type, store as 'YYYY-MM-DD' string
-                widget.answers[q.fieldName] =
-                    picked.toIso8601String().split('T')[0];
+                widget.answers[q.fieldName] = newVal;
               });
-              widget.onAnswerChanged?.call();
+              widget.onAnswerChanged?.call(q.fieldName, old, newVal);
             }
           },
           child: Container(
@@ -877,11 +920,13 @@ class _QuestionViewState extends State<QuestionView> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () {
+                        final old = widget.answers[q.fieldName];
                         setState(() {
                           _selectedDate = null;
                           widget.answers[q.fieldName] = q.dontKnow;
                         });
-                        widget.onAnswerChanged?.call();
+                        widget.onAnswerChanged
+                            ?.call(q.fieldName, old, q.dontKnow);
                       },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -915,11 +960,13 @@ class _QuestionViewState extends State<QuestionView> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () {
+                        final old = widget.answers[q.fieldName];
                         setState(() {
                           _selectedDate = null;
                           widget.answers[q.fieldName] = q.refuse;
                         });
-                        widget.onAnswerChanged?.call();
+                        widget.onAnswerChanged
+                            ?.call(q.fieldName, old, q.refuse);
                       },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -960,6 +1007,7 @@ class _QuestionViewState extends State<QuestionView> {
       children: [
         InkWell(
           onTap: () async {
+            final old = widget.answers[q.fieldName];
             final pickedDate = await showDatePicker(
               context: context,
               initialDate: _selectedDateTime ?? DateTime.now(),
@@ -980,11 +1028,14 @@ class _QuestionViewState extends State<QuestionView> {
                   pickedTime.hour,
                   pickedTime.minute,
                 );
+                if (widget.answers[q.fieldName] == combined.toIso8601String())
+                  return;
                 setState(() {
                   _selectedDateTime = combined;
-                  widget.answers[q.fieldName] = combined;
+                  widget.answers[q.fieldName] = combined.toIso8601String();
                 });
-                widget.onAnswerChanged?.call();
+                widget.onAnswerChanged
+                    ?.call(q.fieldName, old, combined.toIso8601String());
               }
             }
           },
