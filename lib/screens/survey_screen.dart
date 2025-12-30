@@ -2029,51 +2029,52 @@ class _SurveyScreenState extends State<SurveyScreen> {
                 ),
         ),
         actions: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Discard Changes?'),
-                      content: const Text(
-                          'Are you sure you want to discard all changes and exit? This cannot be undone.'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Discard & Exit',
-                              style: TextStyle(color: Colors.red)),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true) {
-                    Navigator.pop(context, 'discard');
-                  }
-                },
-                child: const Text('Discard & Exit',
-                    style: TextStyle(color: Colors.red)),
-              ),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, 'back'),
-                    child: const Text('Back to Edit'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(context, 'save'),
-                    child: const Text('Save Changes'),
-                  ),
-                ],
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+            child: OverflowBar(
+              alignment: MainAxisAlignment.end,
+              overflowAlignment: OverflowBarAlignment.end,
+              spacing: 8,
+              overflowSpacing: 8,
+              children: [
+                TextButton(
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Discard Changes?'),
+                        content: const Text(
+                            'Are you sure you want to discard all changes and exit? This cannot be undone.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Discard & Exit',
+                                style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      Navigator.pop(context, 'discard');
+                    }
+                  },
+                  child: const Text('Discard & Exit',
+                      style: TextStyle(color: Colors.red)),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'back'),
+                  child: const Text('Back to Edit'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, 'save'),
+                  child: const Text('Save Changes'),
+                ),
+              ],
+            ),
           ),
         ],
       ),
