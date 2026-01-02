@@ -1,0 +1,74 @@
+{
+  "surveyName": "PRISM CSS 2025-12-08",
+  "surveyId": "prism_css_2025_12_08",
+  "databaseName": "prism_css_2025_12_08.sqlite",
+  "xmlFiles": [
+    "hh_info.xml",
+    "sleeping_structure.xml",
+    "hh_members.xml",
+    "nets.xml"
+  ],
+  "crfs": [
+    {
+      "display_order": 10,
+      "tablename": "hh_info",
+      "displayname": "Household Survey",
+      "isbase": 1,
+      "primarykey": "hhid",
+      "linkingfield": "hhid",
+      "idconfig": {
+        "prefix": "3",
+        "fields": [{"name":"mrccode","length":2},{"name":"vcode","length":2},{"name":"hhnum","length":4}],
+        "incrementLength": 0
+      }
+    },
+    {
+      "display_order": 20,
+      "tablename": "sleeping_structure",
+      "displayname": "Sleeping Structures",
+      "isbase": 0,
+      "primarykey": "hhid,structurenum",
+      "linkingfield": "hhid",
+      "parenttable": "hh_info",
+      "incrementfield": "structurenum",
+      "requireslink": 1,
+      "repeat_count_field": "nstructures",
+      "auto_start_repeat": 2,
+      "repeat_enforce_count": 2,
+      "display_fields": "structurelabel",
+      "entry_condition": "enrolled=1"
+    },
+    {
+      "display_order": 30,
+      "tablename": "hh_members",
+      "displayname": "Household Members",
+      "isbase": 0,
+      "primarykey": "hhid,linenum",
+      "linkingfield": "hhid",
+      "parenttable": "hh_info",
+      "incrementfield": "linenum",
+      "requireslink": 1,
+      "repeat_count_field": "nmembers",
+      "auto_start_repeat": 2,
+      "repeat_enforce_count": 2,
+      "display_fields": "participantsname",
+      "entry_condition": "enrolled=1"
+    },
+    {
+      "display_order": 40,
+      "tablename": "nets",
+      "displayname": "Nets",
+      "isbase": 0,
+      "primarykey": "hhid,netnum",
+      "linkingfield": "hhid",
+      "parenttable": "hh_info",
+      "incrementfield": "netnum",
+      "requireslink": 1,
+      "repeat_count_field": "nnets",
+      "auto_start_repeat": 2,
+      "repeat_enforce_count": 2,
+      "display_fields": "[[brandnet]]",
+      "entry_condition": "enrolled=1"
+    }
+  ]
+}
