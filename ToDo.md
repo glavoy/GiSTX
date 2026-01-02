@@ -1,6 +1,11 @@
 ﻿## To Do
 
 - remove automatic variables from the summary screen when modifying a survey
+- in formchanges table, add the interviewer id to know who made the change
+- add other question types
+    - upload image
+    - gps
+    - voice recording
 
 
 

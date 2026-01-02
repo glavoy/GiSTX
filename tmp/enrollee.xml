@@ -22,9 +22,21 @@
 	<question type = 'radio' fieldname = 'mrc' fieldtype = 'integer'>
 		<text>MRC of enrollment</text>
 		<responses>
-			<response value = '096'>Busitema HC III</response>
-			<response value = '110'>Kigandalo HC IV</response>
+			<response value = '1'>Busitema HC III</response>
+			<response value = '2'>Kigandalo HC IV</response>
 		</responses>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'mrc_code' fieldtype = 'text'>
+		<calculation type='case'>
+			<when field='mrc' operator='=' value='1'>
+				<result type='constant' value='096' />
+			</when>
+			<else>
+				<result type='constant' value='110' />
+			</else>
+		</calculation>
 	</question>
 
 
@@ -196,8 +208,10 @@ Enter 0 if child is under 1 year old</text>
 	<question type = 'radio' fieldname = 'age_eligible' fieldtype = 'integer'>
 		<text>Age eligibility:
 
-Years: [[age]]
-Months: [[agemonths]]
+Age in Years: [[age]]
+Age in Months: [[agemonths_calculated]]
+
+Age in months on April 1 2025: [[age_at_apr2025]]
 
 Individual is 8 months or older at time of enrollment (today) AND was younger than 1 year (12 months) on April 1st, 2025</text>
 		<logic_check>
@@ -453,7 +467,7 @@ Do you want to proceed with enrollment anyway?</text>
 			<response value = '96'>Other</response>
 		</responses>
 		<preskip>
-			<skip fieldname='vx_doses_received' condition = '&lt;' response='2' response_type='fixed' skiptofieldname ='vx_doses_miss'></skip>
+			<skip fieldname='vx_doses_received' condition = '&lt;' response='2' response_type='fixed' skiptofieldname ='vx_dose_summary'></skip>
 		</preskip>
 		<postskip>
 			<skip fieldname='vx_dose2_where' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='vx_dose2_date'></skip>
@@ -531,7 +545,7 @@ Otherwise go back and correct the dose dates</text>
 			<response value = '96'>Other</response>
 		</responses>
 		<preskip>
-			<skip fieldname='vx_doses_received' condition = '&lt;' response='3' response_type='fixed' skiptofieldname ='vx_doses_miss'></skip>
+			<skip fieldname='vx_doses_received' condition = '&lt;' response='3' response_type='fixed' skiptofieldname ='vx_dose_summary'></skip>
 		</preskip>
 		<postskip>
 			<skip fieldname='vx_dose3_where' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='vx_dose3_date'></skip>
@@ -609,7 +623,7 @@ Otherwise go back and correct the dose dates</text>
 			<response value = '96'>Other</response>
 		</responses>
 		<preskip>
-			<skip fieldname='vx_doses_received' condition = '&lt;' response='4' response_type='fixed' skiptofieldname ='vx_doses_miss'></skip>
+			<skip fieldname='vx_doses_received' condition = '&lt;' response='4' response_type='fixed' skiptofieldname ='vx_dose_summary'></skip>
 		</preskip>
 		<postskip>
 			<skip fieldname='vx_dose4_where' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='vx_dose4_date'></skip>
@@ -680,21 +694,22 @@ Otherwise go back and correct the dose dates</text>
 
 
 	<question type = 'radio' fieldname = 'vx_dose_summary' fieldtype = 'integer'>
-		<text>Review and confirm the dates you have entered for malaria vaccine doses:
+		<text>Review and confirm the dates you have entered for malaria vaccine doses.
+
+If any date is incorrect, please go back and correct it.
+
 Dose 1: [[vx_dose1_date]]
-Dose 2: [[vx_dose3_date]]
+Dose 2: [[vx_dose2_date]]
 Dose 3: [[vx_dose3_date]]
 Dose 4: [[vx_dose4_date]]</text>
 		<responses>
-			<response value = '1'>Yes</response>
-			<response value = '0'>No (go back and correct)</response>
+			<response value = '1'>Yes, dates are correct</response>
 		</responses>
 	</question>
 
 
 	<question type = 'radio' fieldname = 'vx_doses_miss' fieldtype = 'integer'>
-		<text>Have any doses been missed since starting the vaccine series? (Confirm the age and timing of previous doses to assess this to discuss with the parent).
-If the child started the series late</text>
+		<text>Have any doses been missed since starting the vaccine series? (Confirm the age and timing of previous doses to assess this to discuss with the parent).</text>
 		<responses>
 			<response value = '1'>Yes</response>
 			<response value = '0'>No</response>
@@ -851,7 +866,7 @@ If the child started the series late</text>
 		<text>Specify other:</text>
 		<maxCharacters>80</maxCharacters>
 		<postskip>
-			<skip fieldname='hib_doses_received' condition = '=' response='1' response_type='fixed' skiptofieldname ='timetobed'></skip>
+			<skip fieldname='hib_doses_received' condition = '=' response='1' response_type='fixed' skiptofieldname ='hib_dose_summary'></skip>
 		</postskip>
 	</question>
 
@@ -864,7 +879,7 @@ If the child started the series late</text>
 			<response value = '96'>Other</response>
 		</responses>
 		<preskip>
-			<skip fieldname='hib_doses_received' condition = '&lt;' response='2' response_type='fixed' skiptofieldname ='timetobed'></skip>
+			<skip fieldname='hib_doses_received' condition = '&lt;' response='2' response_type='fixed' skiptofieldname ='hib_dose_summary'></skip>
 		</preskip>
 		<postskip>
 			<skip fieldname='hib_dose2_where' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_dose2_date'></skip>
@@ -890,6 +905,25 @@ If the child started the series late</text>
 		<logic_check>
 			hib_dose2_date &lt; dob; 'Date of vaccination cannot be before date of birth!'
 		</logic_check>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'hibdose2_warning_time' fieldtype = 'integer'>
+		<calculation type='date_diff' field='hib_dose1_date' value='hib_dose2_date' unit='w' />
+	</question>
+
+
+	<question type = 'radio' fieldname = 'hib_dose2_datecheck' fieldtype = 'integer'>
+		<text>WARNING!
+
+Dose 2 is less than 3 weeks after dose 1. Is this correct?
+Otherwise go back and correct the dose dates</text>
+		<responses>
+			<response value = '1'>Yes - proceed</response>
+		</responses>
+		<preskip>
+			<skip fieldname='hibdose2_warning_time' condition = '&gt;=' response='3' response_type='fixed' skiptofieldname ='hib_dose2_date_ver'></skip>
+		</preskip>
 	</question>
 
 
@@ -926,7 +960,7 @@ If the child started the series late</text>
 			<response value = '96'>Other</response>
 		</responses>
 		<preskip>
-			<skip fieldname='hib_doses_received' condition = '&lt;' response='3' response_type='fixed' skiptofieldname ='timetobed'></skip>
+			<skip fieldname='hib_doses_received' condition = '&lt;' response='3' response_type='fixed' skiptofieldname ='hib_dose_summary'></skip>
 		</preskip>
 		<postskip>
 			<skip fieldname='hib_dose3_where' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_dose3_date'></skip>
@@ -955,6 +989,25 @@ If the child started the series late</text>
 	</question>
 
 
+	<question type = 'automatic' fieldname = 'hibdose3_warning_time' fieldtype = 'integer'>
+		<calculation type='date_diff' field='hib_dose2_date' value='hib_dose3_date' unit='w' />
+	</question>
+
+
+	<question type = 'radio' fieldname = 'hib_dose3_datecheck' fieldtype = 'integer'>
+		<text>WARNING!
+
+Dose 3 is less than 3 weeks after dose 2. Is this correct?
+Otherwise go back and correct the dose dates</text>
+		<responses>
+			<response value = '1'>Yes - proceed</response>
+		</responses>
+		<preskip>
+			<skip fieldname='hibdose3_warning_time' condition = '&gt;=' response='3' response_type='fixed' skiptofieldname ='hib_dose3_date_ver'></skip>
+		</preskip>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'hib_dose3_date_ver' fieldtype = 'integer'>
 		<text>Method of verification of dose 3 date</text>
 		<logic_check>
@@ -966,7 +1019,7 @@ If the child started the series late</text>
 			<response value = '96'>Other</response>
 		</responses>
 		<postskip>
-			<skip fieldname='hib_dose3_date_ver' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='timetobed'></skip>
+			<skip fieldname='hib_dose3_date_ver' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_dose_summary'></skip>
 		</postskip>
 	</question>
 
@@ -977,8 +1030,22 @@ If the child started the series late</text>
 	</question>
 
 
+	<question type = 'radio' fieldname = 'hib_dose_summary' fieldtype = 'integer'>
+		<text>Review and confirm the dates you have entered for the HiB vaccine doses.
+
+If any date is incorrect, please go back and correct it.
+
+Dose 1: [[hib_dose1_date]]
+Dose 2: [[hib_dose2_date]]
+Dose 3: [[hib_dose3_date]]</text>
+		<responses>
+			<response value = '1'>Yes, dates are correct</response>
+		</responses>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'timetobed' fieldtype = 'integer'>
-		<text>What time did  [[participantsname]] get into bed last night? (best estimate ok)</text>
+		<text>What time did [[participantsname]] get into bed last night? (best estimate ok)</text>
 		<responses>
 			<response value = '1'>Before 6pm</response>
 			<response value = '2'>6-7pm</response>
@@ -1053,25 +1120,27 @@ If the child started the series late</text>
 			<response value = '3'>More than 14 days ago</response>
 		</responses>
 		<preskip>
-			<skip fieldname='prevdiag_when' condition = '&gt;' response='1' response_type='fixed' skiptofieldname ='consent'></skip>
+			<skip fieldname='prevdiag_when' condition = '&gt;' response='1' response_type='fixed' skiptofieldname ='prevdiag_al'></skip>
 		</preskip>
 	</question>
 
 
 	<question type = 'radio' fieldname = 'prevdiag_al' fieldtype = 'integer'>
-		<text>Was AL (coartem) prescribed and taken?</text>
+		<text>Was AL (coartem) prescribed and taken for the previous diagnosis?</text>
 		<responses>
 			<response value = '1'>Yes</response>
 			<response value = '0'>No</response>
+			<response value = '88'>Do not know</response>
 		</responses>
 	</question>
 
 
 	<question type = 'radio' fieldname = 'prevdiag_othermeds' fieldtype = 'integer'>
-		<text>Any other medication prescribed?</text>
+		<text>Any other medication prescribed for the previous diagnosis?</text>
 		<responses>
 			<response value = '1'>Yes</response>
 			<response value = '0'>No</response>
+			<response value = '88'>Do not know</response>
 		</responses>
 	</question>
 
@@ -1116,7 +1185,7 @@ If the child started the series late</text>
 
 
 	<question type = 'text' fieldname = 'uid2' fieldtype = 'text'>
-		<text>Please re-nter the UID from the REGISTER barcode (5 digits)</text>
+		<text>Please re-enter the UID from the REGISTER barcode (5 digits)</text>
 		<maxCharacters>=5</maxCharacters>
 		<logic_check>
 			uid2 &lt;&gt; uid; 'This does not match your previous entry of the UID!'
@@ -1156,6 +1225,7 @@ If the child started the series late</text>
 	<question type = 'text' fieldname = 'fpbarcode1_immrse' fieldtype = 'text'>
 		<text>Enter IMMRSE barcode</text>
 		<maxCharacters>=14</maxCharacters>
+		<mask value="IM-[0-9][0-9]-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
 		<unique_check>
 			<message>This barcode has already been used!</message>
 		</unique_check>
@@ -1168,6 +1238,7 @@ If the child started the series late</text>
 	<question type = 'text' fieldname = 'fpbarcode2_immrse' fieldtype = 'text'>
 		<text>Re-enter IMMRSE barcode</text>
 		<maxCharacters>=14</maxCharacters>
+		<mask value="IM-[0-9][0-9]-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
 		<logic_check>
 			fpbarcode2_immrse &lt;&gt; fpbarcode1_immrse; 'This does not match your previous entry of the barcode!'
 		</logic_check>

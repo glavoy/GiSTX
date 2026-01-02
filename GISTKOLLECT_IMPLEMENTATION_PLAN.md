@@ -831,9 +831,9 @@ Policy 2 - Allow reads:
 
 ### Step 3.3: Checklist
 
-- [ ] `uploads` bucket created
-- [ ] `surveys` bucket created
-- [ ] Storage policies configured
+- [x] `uploads` bucket created
+- [x] `surveys` bucket created
+- [x] Storage policies configured
 
 ---
 
@@ -1203,11 +1203,11 @@ You can test in the Supabase dashboard:
 
 ### Step 4.10: Checklist
 
-- [ ] Supabase CLI installed
-- [ ] CLI logged in and linked to project
-- [ ] app-login function created and deployed
-- [ ] app-sync function created and deployed
-- [ ] Functions appear in Supabase dashboard
+- [x] Supabase CLI installed
+- [x] CLI logged in and linked to project
+- [x] app-login function created and deployed
+- [x] app-sync function created and deployed
+- [x] Functions appear in Supabase dashboard
 
 ---
 
