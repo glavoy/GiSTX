@@ -1,6 +1,7 @@
 ﻿## To Do
 
 - remove automatic variables from the summary screen when modifying a survey
+- questions that are skipped due to skip pattern change (xxx -> NULL) do not appear in the list of changes at the end
 - in formchanges table, add the interviewer id to know who made the change
 - add other question types
     - upload image

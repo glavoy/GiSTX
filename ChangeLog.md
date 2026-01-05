@@ -1,7 +1,17 @@
-### 0.0.8
 
 
-### 0.0.7
+## [0.0.8] - 2026-01-02
+
+### Fixed
+- **Data persistence in skipped questions:** Implemented real-time clearing of answers when skip logic bypasses previously answered questions
+  - Added `_clearAnswersInRange()` method to clear data for questions in range being jumped over during forward navigation
+  - Modified `_next()` method to detect skip logic jumps and automatically clear affected fields
+  - Prevents incorrect data from appearing on information screens and being saved to database
+  - Complements existing save-time cleanup with proactive navigation-time clearing
+
+
+
+### [0.0.7] - 2025-12-30
 * Added 'startdate' automatic field type
 * Added `date_offset` calculation type to calculate date-diff between two dates
 * Added optional regex formatting (input masking) for text fileds
