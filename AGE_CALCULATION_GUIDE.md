@@ -8,71 +8,73 @@ The system now supports automatic age calculations from date fields, which can b
 
 ## Calculation Types
 
-### 1. `age_from_date` - Calculate age to today
+### `age_at_date` - Calculate age at a specific date
 
-Calculates the age from a date field to the current date.
+Calculates the age from a date field to a specific target date. The target date can be either a hardcoded date or a reference to another date field (like `startdate`).
 
-**XML Syntax:**
-```xml
-<question type='automatic' fieldname='age_calculated' fieldtype='integer'>
-    <calculation type='age_from_date' field='dob' value='years'/>
-</question>
-```
-
-**Attributes:**
-- `type='age_from_date'` - Required. Specifies this is an age calculation to today
-- `field='dob'` - Required. The fieldname of the date to calculate from
-- `value='years'` - Optional. Unit of measurement. Options:
-  - `'years'` (default) - Returns age in whole years
-  - `'months'` - Returns age in total months
-  - `'days'` - Returns age in total days
-
-**Examples:**
-```xml
-<!-- Calculate age in years -->
-<question type='automatic' fieldname='age_years' fieldtype='integer'>
-    <calculation type='age_from_date' field='dob' value='years'/>
-</question>
-
-<!-- Calculate age in months -->
-<question type='automatic' fieldname='age_months' fieldtype='integer'>
-    <calculation type='age_from_date' field='dob' value='months'/>
-</question>
-
-<!-- Calculate age in days -->
-<question type='automatic' fieldname='age_days' fieldtype='integer'>
-    <calculation type='age_from_date' field='dob' value='days'/>
-</question>
-```
-
-### 2. `age_at_date` - Calculate age at a specific date
-
-Calculates the age from a date field to a specific target date (useful for eligibility criteria).
-
-**XML Syntax:**
+**XML Syntax (hardcoded date):**
 ```xml
 <question type='automatic' fieldname='age_on_cutoff' fieldtype='integer'>
     <calculation type='age_at_date' field='dob' value='months' separator='2025-05-31'/>
 </question>
 ```
 
+**XML Syntax (field reference):**
+```xml
+<question type='automatic' fieldname='age_calculated' fieldtype='integer'>
+    <calculation type='age_at_date' field='dob' value='years' separator='[[startdate]]'/>
+</question>
+```
+
 **Attributes:**
 - `type='age_at_date'` - Required. Specifies this is an age calculation to a specific date
 - `field='dob'` - Required. The fieldname of the date to calculate from
-- `separator='2025-05-31'` - Required. The target date in ISO format (YYYY-MM-DD)
+- `separator` - Required. Either:
+  - A hardcoded date in ISO format (YYYY-MM-DD): `'2025-05-31'`
+  - A field reference using double brackets: `'[[startdate]]'` or `'[[fieldname]]'`
 - `value='months'` - Optional. Unit of measurement (years, months, or days)
 
 **Examples:**
 ```xml
-<!-- Calculate age in months on May 31, 2025 -->
+<!-- Calculate age in years from survey start date (recommended for consistent results) -->
+<question type='automatic' fieldname='age_years' fieldtype='integer'>
+    <calculation type='age_at_date' field='dob' value='years' separator='[[startdate]]'/>
+</question>
+
+<!-- Calculate age in months from survey start date -->
+<question type='automatic' fieldname='age_months' fieldtype='integer'>
+    <calculation type='age_at_date' field='dob' value='months' separator='[[startdate]]'/>
+</question>
+
+<!-- Calculate age on a specific hardcoded date (e.g., for eligibility criteria) -->
 <question type='automatic' fieldname='age_on_may31' fieldtype='integer'>
     <calculation type='age_at_date' field='dob' value='months' separator='2025-05-31'/>
 </question>
 
-<!-- Calculate age in years on a specific enrollment date -->
+<!-- Calculate age on another date field -->
 <question type='automatic' fieldname='age_at_enrollment' fieldtype='integer'>
-    <calculation type='age_at_date' field='dob' value='years' separator='2025-12-31'/>
+    <calculation type='age_at_date' field='dob' value='years' separator='[[enrollment_date]]'/>
 </question>
+```
+
+### ~~`age_from_date`~~ - DEPRECATED
+
+**⚠️ DEPRECATED:** The `age_from_date` calculation type is deprecated and should not be used in new surveys.
+
+**Why it's deprecated:**
+- When editing an existing survey months later, it recalculates age using today's date instead of the original survey date
+- This causes incorrect age values that don't match what was originally recorded
+- The `age_at_date` with `separator='[[startdate]]'` provides the same functionality but with explicit, consistent behavior
+
+**Migration:**
+Replace any use of `age_from_date` with `age_at_date` using `separator='[[startdate]]'`:
+
+```xml
+<!-- OLD - DEPRECATED -->
+<calculation type='age_from_date' field='dob' value='years'/>
+
+<!-- NEW - RECOMMENDED -->
+<calculation type='age_at_date' field='dob' value='years' separator='[[startdate]]'/>
 ```
 
 ## Using Age Calculations in Logic Checks
@@ -91,9 +93,9 @@ Once you have automatic age calculation fields, you can reference them in logic 
     </date_range>
 </question>
 
-<!-- Calculate age automatically -->
+<!-- Calculate age automatically from survey start date -->
 <question type='automatic' fieldname='age_calculated' fieldtype='integer'>
-    <calculation type='age_from_date' field='dob' value='years'/>
+    <calculation type='age_at_date' field='dob' value='years' separator='[[startdate]]'/>
 </question>
 
 <!-- User enters age with validation -->
@@ -129,9 +131,9 @@ Once you have automatic age calculation fields, you can reference them in logic 
     </date_range>
 </question>
 
-<!-- Calculate current age in months -->
+<!-- Calculate age in months from survey start date -->
 <question type='automatic' fieldname='age_in_months' fieldtype='integer'>
-    <calculation type='age_from_date' field='dob' value='months'/>
+    <calculation type='age_at_date' field='dob' value='months' separator='[[startdate]]'/>
 </question>
 
 <!-- Calculate age on specific date -->

@@ -1,5 +1,8 @@
 ﻿## To Do
 
+### Bug
+- when viewing/modifying a survey, when calculating an age (months or years) - it forces the user to enter the age form TODAY's date - when viewing/modifying n the same data it will work fine - but if it is far in the future, then teh age will be incorrect. Need to use starttime/startdate when calculating age when viewing/modifying - need to update DataKolecta as well
+
 - remove automatic variables from the summary screen when modifying a survey
 - questions that are skipped due to skip pattern change (xxx -> NULL) do not appear in the list of changes at the end
 - in formchanges table, add the interviewer id to know who made the change
@@ -9,9 +12,6 @@
     - voice recording
 
 
-
-
-- Kollect, the name of the app - or GiSTKollect
 - add text backup files when writing to the database
 - add an 'i' for additional information - help the end-user - might need an additional column in the spreadsheet
 - set up data management website per project - create an app that listens for new data and uploads to the server

@@ -297,7 +297,18 @@ class AutoFields {
           return '';
 
         case 'age_from_date':
-          return _calculateAgeFromDate(config, answers);
+          // DEPRECATED: Use age_at_date with separator='[[startdate]]' instead
+          // This ensures explicit, clear date reference and works correctly in edit mode
+          debugPrint(
+              '[AutoFields] WARNING: age_from_date is deprecated. Use age_at_date with separator="[[startdate]]" instead.');
+          // For backward compatibility, treat as age_at_date with startdate
+          final modifiedConfig = CalculationConfig(
+            type: 'age_at_date',
+            field: config.field,
+            value: config.value,
+            separator: '[[startdate]]',
+          );
+          return _calculateAgeAtDate(modifiedConfig, answers);
 
         case 'age_at_date':
           return _calculateAgeAtDate(config, answers);
@@ -354,43 +365,12 @@ class AutoFields {
     }
   }
 
-  /// Calculate age from a date field to today
-  /// Returns age in specified unit (years, months, or days)
-  static String _calculateAgeFromDate(
-      CalculationConfig config, AnswerMap answers) {
-    try {
-      final dateField = _sanitizeField(config.field);
-      if (dateField == null) return '';
-
-      final dateValue = answers[dateField];
-      if (dateValue == null) return '';
-
-      DateTime birthDate;
-      if (dateValue is DateTime) {
-        birthDate = dateValue;
-      } else if (dateValue is String) {
-        try {
-          birthDate = DateTime.parse(dateValue);
-        } catch (e) {
-          debugPrint('[AutoFields] Error parsing date from $dateField: $e');
-          return '';
-        }
-      } else {
-        return '';
-      }
-
-      final now = DateTime.now();
-      final unit = config.value?.toLowerCase() ?? 'years';
-
-      return _calculateAgeDifference(birthDate, now, unit);
-    } catch (e) {
-      debugPrint('[AutoFields] Error in age_from_date calculation: $e');
-      return '';
-    }
-  }
-
   /// Calculate age from a date field to a specific target date
   /// Returns age in specified unit (years, months, or days)
+  ///
+  /// The separator attribute can be:
+  /// - A hardcoded date string: '2025-04-01'
+  /// - A field reference: '[[startdate]]' or '[[fieldname]]'
   static String _calculateAgeAtDate(
       CalculationConfig config, AnswerMap answers) {
     try {
@@ -422,11 +402,43 @@ class AutoFields {
       }
 
       DateTime targetDate;
-      try {
-        targetDate = DateTime.parse(config.separator!);
-      } catch (e) {
-        debugPrint('[AutoFields] Error parsing target date: $e');
-        return '';
+      String separatorValue = config.separator!;
+
+      // Check if separator is a field reference like [[startdate]]
+      if (separatorValue.startsWith('[[') && separatorValue.endsWith(']]')) {
+        final fieldName = separatorValue.substring(2, separatorValue.length - 2);
+        final fieldValue = answers[fieldName];
+
+        if (fieldValue == null) {
+          debugPrint(
+              '[AutoFields] Field reference $fieldName in separator is null or not found');
+          return '';
+        }
+
+        // Parse the field value as a date
+        if (fieldValue is DateTime) {
+          targetDate = fieldValue;
+        } else if (fieldValue is String) {
+          try {
+            targetDate = DateTime.parse(fieldValue);
+          } catch (e) {
+            debugPrint(
+                '[AutoFields] Error parsing date from field $fieldName: $e');
+            return '';
+          }
+        } else {
+          debugPrint(
+              '[AutoFields] Field $fieldName is not a valid date type');
+          return '';
+        }
+      } else {
+        // It's a hardcoded date string
+        try {
+          targetDate = DateTime.parse(separatorValue);
+        } catch (e) {
+          debugPrint('[AutoFields] Error parsing target date: $e');
+          return '';
+        }
       }
 
       final unit = config.value?.toLowerCase() ?? 'years';

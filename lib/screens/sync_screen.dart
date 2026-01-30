@@ -240,11 +240,21 @@ class _SyncScreenState extends State<SyncScreen> {
       final username = credentials['username']!;
       final password = credentials['password']!;
 
-      // 3. Get DB Path
+      // 3. Get DB Path from manifest
+      final manifest = await _surveyConfig.getActiveSurveyManifest();
+      if (manifest == null) {
+        throw Exception('Could not load survey manifest for: $surveyName');
+      }
+
+      final dbName = manifest['databaseName'] as String?;
+      if (dbName == null) {
+        throw Exception('No databaseName found in manifest for: $surveyName');
+      }
+
       final baseDir = await _surveyConfig.getSurveysDirectory();
       // Go up one level from surveys to get to GiSTX root, then into databases
       final gistxDir = baseDir.parent;
-      final dbPath = p.join(gistxDir.path, 'databases', '$surveyId.sqlite');
+      final dbPath = p.join(gistxDir.path, 'databases', dbName);
       final dbFile = File(dbPath);
 
       if (!await dbFile.exists()) {

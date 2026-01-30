@@ -10,33 +10,33 @@
 	</question>
 
 
-	<question type = 'text' fieldname = 'intnum' fieldtype = 'text_integer'>
-		<text>Interviewer's Number</text>
-		<maxCharacters>=2</maxCharacters>
+	<question type = 'text' fieldname = 'deviceid' fieldtype = 'text_integer'>
+		<text>Please enter the 3-digit device ID assigned to your phone</text>
+		<maxCharacters>=3</maxCharacters>
 		<numeric_check>
-			<values minvalue ='10' maxvalue='99' other_values = '10' message = 'Number must be between 10 and 99!'></values>
+			<values minvalue ='100' maxvalue='999' other_values = '100' message = 'Number must be between 100 and 999!'></values>
 		</numeric_check>
+	</question>
+
+
+	<question type = 'text' fieldname = 'deviceid2' fieldtype = 'text_integer'>
+		<text>Please re-enter your 3-digit device ID</text>
+		<maxCharacters>=3</maxCharacters>
+		<numeric_check>
+			<values minvalue ='100' maxvalue='999' other_values = '100' message = 'Number must be between 100 and 999!'></values>
+		</numeric_check>
+		<logic_check>
+			deviceid2 &lt;&gt; deviceid; 'This does not match your previous entry of the Device ID!'
+		</logic_check>
 	</question>
 
 
 	<question type = 'radio' fieldname = 'mrc' fieldtype = 'integer'>
 		<text>MRC of enrollment</text>
 		<responses>
-			<response value = '1'>Busitema HC III</response>
-			<response value = '2'>Kigandalo HC IV</response>
+			<response value = '110'>Busitema HC III</response>
+			<response value = '096'>Kigandalo HC IV</response>
 		</responses>
-	</question>
-
-
-	<question type = 'automatic' fieldname = 'mrc_code' fieldtype = 'text'>
-		<calculation type='case'>
-			<when field='mrc' operator='=' value='1'>
-				<result type='constant' value='096' />
-			</when>
-			<else>
-				<result type='constant' value='110' />
-			</else>
-		</calculation>
 	</question>
 
 
@@ -67,7 +67,7 @@ Do you want to proceed anyway?</text>
 			<response value = '1'>Yes - I am at Busitema HC III and this participant resides in Mayuge district.</response>
 		</responses>
 		<preskip>
-			<skip fieldname='mrc' condition = '=' response='110' response_type='fixed' skiptofieldname ='busia_warning'></skip>
+			<skip fieldname='mrc' condition = '=' response='096' response_type='fixed' skiptofieldname ='busia_warning'></skip>
 			<skip fieldname='district' condition = '=' response='124' response_type='fixed' skiptofieldname ='subcounty'></skip>
 		</preskip>
 	</question>
@@ -83,7 +83,7 @@ Do you want to proceed anyway?</text>
 			<response value = '1'>Yes - I am at Kigandalo HC IV and this participant resides in Busia district.</response>
 		</responses>
 		<preskip>
-			<skip fieldname='mrc' condition = '=' response='096' response_type='fixed' skiptofieldname ='subcounty'></skip>
+			<skip fieldname='mrc' condition = '=' response='110' response_type='fixed' skiptofieldname ='subcounty'></skip>
 			<skip fieldname='district' condition = '=' response='181' response_type='fixed' skiptofieldname ='subcounty'></skip>
 		</preskip>
 	</question>
@@ -148,12 +148,12 @@ If the exact month is unknown put the first month of the season of the year when
 
 
 	<question type = 'automatic' fieldname = 'age_calculated' fieldtype = 'integer'>
-		<calculation type='age_from_date' field='dob' value='years'/>
+		<calculation type='age_at_date' field='dob' value='years' separator='[[startdate]]'/>
 	</question>
 
 
 	<question type = 'automatic' fieldname = 'agemonths_calculated' fieldtype = 'integer'>
-		<calculation type='age_from_date' field='dob' value='months'/>
+		<calculation type='age_at_date' field='dob' value='months' separator='[[startdate]]'/>
 	</question>
 
 
@@ -211,7 +211,7 @@ Enter 0 if child is under 1 year old</text>
 Age in Years: [[age]]
 Age in Months: [[agemonths_calculated]]
 
-Age in months on April 1 2025: [[age_at_apr2025]]
+Age in months on April 1, 2025: [[age_at_apr2025]]
 
 Individual is 8 months or older at time of enrollment (today) AND was younger than 1 year (12 months) on April 1st, 2025</text>
 		<logic_check>
@@ -230,7 +230,7 @@ Individual is 8 months or older at time of enrollment (today) AND was younger th
 The child's age is outside the protocol enrollment range (8 months to 22+ months shifting limit).
 
 Years: [[age]]
-Months: [[agemonths]]
+Months: [[agemonths_calculated]]
 
 Do you want to proceed with enrollment anyway?</text>
 		<responses>
@@ -265,6 +265,18 @@ Do you want to proceed with enrollment anyway?</text>
 	</question>
 
 
+	<question type = 'radio' fieldname = 'ill_noteligible' fieldtype = 'integer'>
+		<text>Does the child have another non-malaria severe illness that prevents their participation?</text>
+		<responses>
+			<response value = '0'>No - include</response>
+			<response value = '1'>Yes - EXCLUDE</response>
+		</responses>
+		<preskip>
+			<skip fieldname='mal_test_eligible' condition = '=' response='0' response_type='fixed' skiptofieldname ='comments'></skip>
+		</preskip>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'consent_eligible' fieldtype = 'integer'>
 		<text>Parent/guardian willing to provide consent</text>
 		<responses>
@@ -272,7 +284,7 @@ Do you want to proceed with enrollment anyway?</text>
 			<response value = '0'>No - exclude</response>
 		</responses>
 		<preskip>
-			<skip fieldname='mal_test_eligible' condition = '=' response='0' response_type='fixed' skiptofieldname ='comments'></skip>
+			<skip fieldname='ill_noteligible' condition = '=' response='1' response_type='fixed' skiptofieldname ='comments'></skip>
 		</preskip>
 	</question>
 
@@ -336,6 +348,29 @@ Do you want to proceed with enrollment anyway?</text>
 	</question>
 
 
+	<question type = 'radio' fieldname = 'vx_card_no' fieldtype = 'integer'>
+		<text>Why does the parent NOT have a vaccine card?</text>
+		<responses>
+			<response value = '1'>Left at home</response>
+			<response value = '2'>Was not given a card</response>
+			<response value = '3'>Card was misplaced/lost</response>
+			<response value = '96'>Other</response>
+		</responses>
+		<preskip>
+			<skip fieldname='vx_card' condition = '&lt;&gt;' response='0' response_type='fixed' skiptofieldname ='vx_any'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'text' fieldname = 'vx_card_no_oth' fieldtype = 'text'>
+		<text>Specify other:</text>
+		<maxCharacters>80</maxCharacters>
+		<preskip>
+			<skip fieldname='vx_card_no' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='vx_any'></skip>
+		</preskip>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'vx_any' fieldtype = 'integer'>
 		<text>Has [[participantsname]] received any doses of the malaria vaccine?</text>
 		<responses>
@@ -355,6 +390,9 @@ Do you want to proceed with enrollment anyway?</text>
 			<response value = '2'>Vaccine not available</response>
 			<response value = '3'>Could not travel to clinic</response>
 			<response value = '4'>Refused/Did not want</response>
+			<response value = '5'>Did not know</response>
+			<response value = '6'>Health worker shared wrong information on dose or schedule</response>
+			<response value = '7'>Child was sick and/or admitted</response>
 			<response value = '96'>Other</response>
 		</responses>
 		<preskip>
@@ -698,6 +736,7 @@ Otherwise go back and correct the dose dates</text>
 
 If any date is incorrect, please go back and correct it.
 
+        (Year–Month–Day)
 Dose 1: [[vx_dose1_date]]
 Dose 2: [[vx_dose2_date]]
 Dose 3: [[vx_dose3_date]]
@@ -726,6 +765,9 @@ Dose 4: [[vx_dose4_date]]</text>
 			<response value = '1'>Vaccine not available</response>
 			<response value = '2'>Could not travel to clinic</response>
 			<response value = '3'>Refused/Did not want</response>
+			<response value = '4'>Did not know</response>
+			<response value = '5'>Health worker shared wrong information on dose or schedule</response>
+			<response value = '6'>Child was sick and/or admitted</response>
 			<response value = '96'>Other</response>
 		</responses>
 		<postskip>
@@ -758,6 +800,9 @@ Dose 4: [[vx_dose4_date]]</text>
 			<response value = '1'>Vaccine not available</response>
 			<response value = '2'>Could not travel to clinic</response>
 			<response value = '3'>Refused/Did not want</response>
+			<response value = '4'>Did not know</response>
+			<response value = '5'>Health worker shared wrong information on dose or schedule</response>
+			<response value = '6'>Child was sick and/or admitted</response>
 			<response value = '96'>Other</response>
 		</responses>
 		<postskip>
@@ -1035,6 +1080,7 @@ Otherwise go back and correct the dose dates</text>
 
 If any date is incorrect, please go back and correct it.
 
+        (Year–Month–Day)
 Dose 1: [[hib_dose1_date]]
 Dose 2: [[hib_dose2_date]]
 Dose 3: [[hib_dose3_date]]</text>
