@@ -2,7 +2,7 @@
 ; This script creates a Windows installer for the GiSTX application
 
 #define MyAppName "GiSTX"
-#define MyAppVersion "0.0.9"
+#define MyAppVersion "0.0.10"
 #define MyAppPublisher "Geoff Lavoy"
 #define MyAppURL "https://www.geofflavoy.com"
 #define MyAppExeName "gistx.exe"
@@ -31,7 +31,7 @@ SolidCompression=yes
 ; Modern look
 WizardStyle=modern
 ; Icon for the installer (uses your app icon)
-; SetupIconFile=assets\branding\gistx.ico
+SetupIconFile=assets\branding\gistx.ico
 ; Uninstall icon
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ; Architecture
