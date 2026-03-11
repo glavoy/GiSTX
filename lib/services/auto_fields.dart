@@ -108,9 +108,10 @@ class AutoFields {
       return val;
     }
 
-    // For new records with registry-based fields, return existing if present
-    // (but not for calculation-based fields, which are handled above)
-    if (!isEditMode && existing is String && existing.isNotEmpty) {
+    // For automatic fields with no registry handler and no calculation:
+    // - Preserve existing value if present (handles linking fields in non-base tables)
+    // - Otherwise fall through to generate default value
+    if (existing is String && existing.isNotEmpty) {
       return existing;
     }
 

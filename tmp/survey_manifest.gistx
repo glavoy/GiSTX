@@ -1,24 +1,45 @@
 {
-  "surveyName": "R21 Test Negative 2025-12-30",
-  "surveyId": "r21_test_negative_2025-12-30",
-  "databaseName": "r21_test_negative_2025-12-30.sqlite",
+  "surveyName": "Clinical Trial 2026-02-05",
+  "surveyId": "clinical_trial_2026-02-05",
+  "databaseName": "clinical_trial.sqlite",
   "xmlFiles": [
-    "enrollee.xml"
+    "enrollment.xml",
+    "followup.xml",
+    "swf.xml"
   ],
   "crfs": [
     {
       "display_order": 10,
-      "tablename": "enrollee",
-      "displayname": "Enrollee",
+      "tablename": "enrollment",
+      "displayname": "Enrollment Form",
       "isbase": 1,
       "primarykey": "subjid",
-      "linkingfield": "subjid",
       "idconfig": {
-        "prefix": "",
-        "fields": [{"name":"mrc","length":3},{"name":"intnum","length":2}],
-        "incrementLength": 4
+        "prefix": "GX",
+        "fields": [{"name":"tabletnum","length":2}],
+        "incrementLength": 3
       },
-      "display_fields": "startdate,participantsname"
+      "requireslink": 0
+    },
+    {
+      "display_order": 20,
+      "tablename": "followup",
+      "displayname": "Followup Survey",
+      "isbase": 0,
+      "primarykey": "subjid,vdate",
+      "linkingfield": "subjid",
+      "parenttable": "enrollment",
+      "requireslink": 1
+    },
+    {
+      "display_order": 30,
+      "tablename": "swf",
+      "displayname": "Subject Withdrawal Form",
+      "isbase": 0,
+      "primarykey": "subjid",
+      "linkingfield": "subjid",
+      "parenttable": "enrollment",
+      "requireslink": 1
     }
   ]
 }

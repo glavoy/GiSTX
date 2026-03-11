@@ -1,3 +1,8 @@
+## [0.0.10] - 2026-02-05
+
+### Fixed
+- **Linking field preservation in non-base tables:** Fixed issue where automatic linking fields (e.g., `subjid` in followup surveys) were being overwritten with `-9` when viewing/modifying records. The system now properly preserves existing values for automatic fields that have no registry handler and no calculation configuration, ensuring linking fields in non-base tables maintain their correct values from the parent table throughout the edit process.
+
 ## [0.0.9] - 2026-01-30
 
 ### Fixed
