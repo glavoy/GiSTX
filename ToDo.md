@@ -24,6 +24,7 @@
 - revisit 'repeat' sections - maybe have them 'inline' - asked at a point in time before the 'main' survey is over - then user can go 'back' through all of them.
 - Add 'button' question type?
 - Add dynamic date ranges. If someone is two years old, don't let date go back now tham 2 years. This can also be logic check
+- update DataKollecta to have same functionality as GiSTX 0.0.9 - look at 'age_at_date' - check designer on website as well
 
 
 
