@@ -3,14 +3,25 @@ import 'package:flutter/foundation.dart';
 import 'package:ftpconnect/ftpconnect.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'settings_service.dart';
 
 class FtpService {
-  static const String _host = '0f7a55b.netsolhost.com';
   FTPConnect? _ftpConnect;
+  String _pathPrefix = '';
+
+  static ({String host, int port, String pathPrefix}) _countryConfig(String country) {
+    if (country == 'Burkina Faso') {
+      return (host: 'ftp.crundata.net', port: 2121, pathPrefix: 'r21');
+    }
+    return (host: '0f7a55b.netsolhost.com', port: 21, pathPrefix: '');
+  }
 
   /// Connect to the FTP server
   Future<bool> connect(String username, String password) async {
-    _ftpConnect = FTPConnect(_host, user: username, pass: password);
+    final country = await SettingsService().country;
+    final config = _countryConfig(country);
+    _pathPrefix = config.pathPrefix;
+    _ftpConnect = FTPConnect(config.host, user: username, pass: password, port: config.port);
     try {
       await _ftpConnect!.connect();
       return true;
@@ -24,6 +35,7 @@ class FtpService {
   Future<List<String>> listSurveyZips() async {
     if (_ftpConnect == null) return [];
     try {
+      if (_pathPrefix.isNotEmpty) await _ftpConnect!.changeDirectory(_pathPrefix);
       await _ftpConnect!.changeDirectory('survey');
       final entries = await _ftpConnect!.listDirectoryContent();
 
@@ -68,6 +80,7 @@ class FtpService {
       final localFile = File(p.join(zipsDir.path, filename));
 
       // Ensure we are in the right directory on server
+      if (_pathPrefix.isNotEmpty) await _ftpConnect!.changeDirectory(_pathPrefix);
       await _ftpConnect!.changeDirectory('survey');
 
       await _ftpConnect!.downloadFile(filename, localFile);
@@ -83,6 +96,7 @@ class FtpService {
     if (_ftpConnect == null) return false;
     try {
       // Ensure we are in the right directory on server
+      if (_pathPrefix.isNotEmpty) await _ftpConnect!.changeDirectory(_pathPrefix);
       await _ftpConnect!.changeDirectory('data');
 
       await _ftpConnect!.uploadFile(file, sRemoteName: remoteFilename);

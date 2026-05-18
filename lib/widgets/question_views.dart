@@ -6,6 +6,8 @@ import '../services/survey_loader.dart';
 import '../services/auto_fields.dart';
 import '../services/csv_data_service.dart';
 import '../services/database_response_service.dart';
+import '../services/settings_service.dart';
+import '../services/app_strings.dart';
 
 /// Custom TextInputFormatter that converts all input to uppercase
 class UpperCaseTextFormatter extends TextInputFormatter {
@@ -179,6 +181,12 @@ class _QuestionViewState extends State<QuestionView> {
   List<QuestionOption> _dynamicOptions = [];
   final ScrollController _radioScrollController = ScrollController();
   final ScrollController _checkboxScrollController = ScrollController();
+  AppStrings _s = const AppStrings(false);
+
+  Future<void> _loadLanguage() async {
+    final country = await SettingsService().country;
+    if (mounted) setState(() => _s = AppStrings(country == 'Burkina Faso'));
+  }
 
   String _normalizeValue(dynamic value) {
     if (value == null) return '';
@@ -196,6 +204,7 @@ class _QuestionViewState extends State<QuestionView> {
   @override
   void initState() {
     super.initState();
+    _loadLanguage();
 
     // Seed state from existing answers if any:
     final q = widget.question;
@@ -529,8 +538,8 @@ class _QuestionViewState extends State<QuestionView> {
           keyboardType:
               isIntegerField ? TextInputType.number : TextInputType.text,
           inputFormatters: formatters,
-          decoration: const InputDecoration(
-            hintText: 'Type your answer',
+          decoration: InputDecoration(
+            hintText: _s.isFrench ? 'Saisissez votre réponse' : 'Type your answer',
           ),
           onChanged: (val) {
             final old = widget.answers[q.fieldName];

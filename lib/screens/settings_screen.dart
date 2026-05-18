@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../services/settings_service.dart';
 import '../services/survey_config_service.dart';
 import '../services/theme_service.dart';
+import '../services/app_strings.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -26,6 +27,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = true;
   bool _obscurePassword = true;
   String _appVersion = '';
+  String _selectedCountry = 'Uganda';
+  AppStrings _s = const AppStrings(false);
 
   @override
   void initState() {
@@ -64,15 +67,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final surveyorId = await _settingsService.surveyorId;
-    // ftpHost is no longer used in UI
     final ftpUsername = await _settingsService.ftpUsername;
     final ftpPassword = await _settingsService.ftpPassword;
+    final country = await _settingsService.country;
 
     if (mounted) {
       setState(() {
         _surveyorIdController.text = surveyorId ?? '';
         _ftpUsernameController.text = ftpUsername ?? '';
         _ftpPasswordController.text = ftpPassword ?? '';
+        _selectedCountry = country;
+        _s = AppStrings(country == 'Burkina Faso');
 
         _isLoading = false;
       });
@@ -84,15 +89,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       try {
         await _settingsService.saveAllSettings(
           surveyorId: _surveyorIdController.text.trim(),
-          ftpHost: '', // Host is hidden/hardcoded, passing empty for now
+          ftpHost: '',
           ftpUsername: _ftpUsernameController.text.trim(),
           ftpPassword: _ftpPasswordController.text,
         );
+        await _settingsService.setCountry(_selectedCountry);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Settings saved successfully'),
+            SnackBar(
+              content: Text(_s.settingsSaved),
               backgroundColor: Colors.green,
             ),
           );
@@ -102,7 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error saving settings: $e'),
+              content: Text(_s.errorSavingSettings(e)),
               backgroundColor: Colors.red,
             ),
           );
@@ -146,7 +152,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Text('Save'),
+              child: Text(_s.save),
             ),
           ),
         ],
@@ -172,7 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           size: 20,
                         ),
                         const SizedBox(width: 8),
-                        Text(_themeService.isDarkMode ? 'Dark Mode' : 'Light Mode'),
+                        Text(_themeService.isDarkMode ? _s.darkMode : _s.lightMode),
                         const SizedBox(width: 8),
                         Switch(
                           value: _themeService.isDarkMode,
@@ -186,7 +192,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const Divider(),
                     const SizedBox(height: 8),
                     Text(
-                      'User Settings',
+                      _s.userSettings,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -194,15 +200,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _surveyorIdController,
-                      decoration: const InputDecoration(
-                        labelText: 'Surveyor ID',
-                        hintText: 'Enter your surveyor ID',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.person),
+                      decoration: InputDecoration(
+                        labelText: _s.surveyorId,
+                        hintText: _s.enterSurveyorId,
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.person),
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Surveyor ID is required';
+                          return _s.surveyorIdRequired;
                         }
                         return null;
                       },
@@ -211,26 +217,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const Divider(),
                     const SizedBox(height: 12),
                     Text(
-                      'Server Credentials',
+                      'Select Country / Sélectionner un pays',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Enter your credentials to access the survey server.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[600],
-                          ),
-                    ),
                     const SizedBox(height: 12),
+                    SegmentedButton<String>(
+                      segments: [
+                        ButtonSegment(
+                          value: 'Uganda',
+                          label: Text(
+                            'Uganda',
+                            style: TextStyle(
+                              color: _selectedCountry != 'Uganda'
+                                  ? Colors.grey[400]
+                                  : null,
+                            ),
+                          ),
+                          icon: Icon(
+                            Icons.flag,
+                            color: _selectedCountry != 'Uganda'
+                                ? Colors.grey[400]
+                                : null,
+                          ),
+                        ),
+                        ButtonSegment(
+                          value: 'Burkina Faso',
+                          label: Text(
+                            'Burkina Faso',
+                            style: TextStyle(
+                              color: _selectedCountry != 'Burkina Faso'
+                                  ? Colors.grey[400]
+                                  : null,
+                            ),
+                          ),
+                          icon: Icon(
+                            Icons.flag,
+                            color: _selectedCountry != 'Burkina Faso'
+                                ? Colors.grey[400]
+                                : null,
+                          ),
+                        ),
+                      ],
+                      selected: {_selectedCountry},
+                      onSelectionChanged: (selection) async {
+                        final country = selection.first;
+                        await _settingsService.setCountry(country);
+                        if (mounted) {
+                          setState(() {
+                            _selectedCountry = country;
+                            _s = AppStrings(country == 'Burkina Faso');
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
                     TextFormField(
                       controller: _ftpUsernameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Username',
-                        hintText: 'Enter username',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.account_circle),
+                      decoration: InputDecoration(
+                        labelText: _s.username,
+                        hintText: _s.enterUsername,
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.account_circle),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -238,8 +287,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       controller: _ftpPasswordController,
                       obscureText: _obscurePassword,
                       decoration: InputDecoration(
-                        labelText: 'Password',
-                        hintText: 'Enter password',
+                        labelText: _s.password,
+                        hintText: _s.enterPassword,
                         border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.lock),
                         suffixIcon: IconButton(
@@ -260,7 +309,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const Divider(),
                     const SizedBox(height: 12),
                     Text(
-                      'Manage Surveys',
+                      _s.manageSurveys,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -269,8 +318,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     OutlinedButton.icon(
                       onPressed: _showDeleteSurveyDialog,
                       icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      label: const Text('Delete Survey',
-                          style: TextStyle(color: Colors.red)),
+                      label: Text(_s.deleteSurvey,
+                          style: const TextStyle(color: Colors.red)),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Colors.red),
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -295,7 +344,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (surveys.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No surveys installed to delete.')),
+        SnackBar(content: Text(_s.noSurveysToDelete)),
       );
       return;
     }
@@ -303,7 +352,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Survey'),
+        title: Text(_s.deleteSurvey),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.builder(
@@ -320,21 +369,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     final confirm = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: const Text('Confirm Deletion'),
-                        content: Text(
-                            'Are you sure you want to delete "$surveyName"?\n\n'
-                            'This will remove the survey definition and source zip.\n'
-                            'Collected data (database) will NOT be deleted.'),
+                        title: Text(_s.confirmDeletion),
+                        content: Text(_s.confirmDeleteMessage(surveyName)),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancel'),
+                            child: Text(_s.cancel),
                           ),
                           FilledButton(
                             style: FilledButton.styleFrom(
                                 backgroundColor: Colors.red),
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Delete'),
+                            child: Text(_s.delete),
                           ),
                         ],
                       ),
@@ -347,7 +393,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Navigator.pop(context); // Close list dialog
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Deleted "$surveyName"'),
+                              content: Text(_s.deletedSurvey(surveyName)),
                               backgroundColor: Colors.green,
                             ),
                           );
@@ -356,7 +402,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Error deleting survey: $e'),
+                              content: Text(_s.errorDeletingSurvey(e)),
                               backgroundColor: Colors.red,
                             ),
                           );
@@ -372,7 +418,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(_s.close),
           ),
         ],
       ),

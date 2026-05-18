@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/db_service.dart';
 import '../services/survey_config_service.dart';
+import '../services/settings_service.dart';
+import '../services/app_strings.dart';
 import 'survey_screen.dart';
 import 'record_selector_screen.dart';
 import 'parent_id_selector_screen.dart';
@@ -52,11 +54,18 @@ class _QuestionnaireSelectorScreenState
   List<QuestionnaireInfo> _availableQuestionnaires = [];
   bool _isLoading = true;
   String? _errorMessage;
+  AppStrings _s = const AppStrings(false);
 
   @override
   void initState() {
     super.initState();
+    _loadLanguage();
     _loadAvailableQuestionnaires();
+  }
+
+  Future<void> _loadLanguage() async {
+    final country = await SettingsService().country;
+    if (mounted) setState(() => _s = AppStrings(country == 'Burkina Faso'));
   }
 
   /// Loads the list of available questionnaire XML files from assets
@@ -224,11 +233,6 @@ class _QuestionnaireSelectorScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.isModifyMode
-              ? 'Select Questionnaire to Modify'
-              : 'Select Questionnaire',
-        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12.0),
@@ -269,7 +273,7 @@ class _QuestionnaireSelectorScreenState
                         const SizedBox(height: 24),
                         ElevatedButton(
                           onPressed: () => Navigator.pop(context),
-                          child: const Text('Go Back'),
+                          child: Text(_s.goBack),
                         ),
                       ],
                     ),
@@ -282,8 +286,8 @@ class _QuestionnaireSelectorScreenState
                     children: [
                       Text(
                         widget.isModifyMode
-                            ? 'Select the questionnaire you want to modify:'
-                            : 'Select the questionnaire you want to complete:',
+                            ? _s.selectQuestionnaireToModifyInstruction
+                            : _s.selectQuestionnaireInstruction,
                         style: Theme.of(context).textTheme.titleLarge,
                         textAlign: TextAlign.center,
                       ),

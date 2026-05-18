@@ -6,6 +6,8 @@ import '../services/db_service.dart';
 import 'survey_screen.dart';
 import '../services/survey_config_service.dart';
 import '../services/question_cache_service.dart';
+import '../services/settings_service.dart';
+import '../services/app_strings.dart';
 
 /// Screen for selecting an existing record to view/modify
 class RecordSelectorScreen extends StatefulWidget {
@@ -25,11 +27,18 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, String?> _selectedValues = {};
   String? _errorMessage;
+  AppStrings _s = const AppStrings(false);
 
   @override
   void initState() {
     super.initState();
+    _loadLanguage();
     _dataFuture = _loadData();
+  }
+
+  Future<void> _loadLanguage() async {
+    final country = await SettingsService().country;
+    if (mounted) setState(() => _s = AppStrings(country == 'Burkina Faso'));
   }
 
   @override
@@ -213,7 +222,7 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
     for (final field in data.primaryKeyFields) {
       if (_selectedValues[field] == null || _selectedValues[field]!.isEmpty) {
         setState(() {
-          _errorMessage = 'Please select a value for ${field.toUpperCase()}.';
+          _errorMessage = _s.pleaseSelectValue(field);
         });
         return;
       }
@@ -224,15 +233,14 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
 
     if (filtered.isEmpty) {
       setState(() {
-        _errorMessage = 'No record found matching the selected criteria.';
+        _errorMessage = _s.noRecordMatchingCriteria;
       });
       return;
     }
 
     if (filtered.length > 1) {
       setState(() {
-        _errorMessage =
-            'Multiple records found. Please select values for all primary key fields.';
+        _errorMessage = _s.multipleRecordsFound;
       });
       return;
     }
@@ -243,7 +251,7 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
 
     if (uniqueId == null) {
       setState(() {
-        _errorMessage = 'Record does not have a uniqueid field.';
+        _errorMessage = _s.noUniqueId;
       });
       return;
     }
@@ -269,7 +277,7 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Select Record'),
+        title: Text(_s.selectRecord),
       ),
       body: SafeArea(
         child: Center(
@@ -293,7 +301,7 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
                               size: 64, color: Colors.red),
                           const SizedBox(height: 16),
                           Text(
-                            'Error loading records',
+                            _s.errorLoadingRecords,
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 8),
@@ -321,12 +329,12 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
                               size: 64, color: Colors.grey),
                           const SizedBox(height: 16),
                           Text(
-                            'No records found',
+                            _s.noRecordsFound,
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'There are no existing surveys to modify.',
+                            _s.noRecordsToModify,
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
@@ -347,12 +355,12 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
                               size: 64, color: Colors.orange),
                           const SizedBox(height: 16),
                           Text(
-                            'Configuration Error',
+                            _s.configurationError,
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'No primary key defined in CRFs table for "${data.tableName}".',
+                            _s.noPrimaryKey(data.tableName),
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
@@ -374,12 +382,12 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Select Record to Modify',
+                                _s.selectRecordToModify,
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Found ${data.records.length} existing records',
+                                _s.foundRecords(data.records.length),
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                             ],
@@ -427,7 +435,7 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
                       FilledButton.icon(
                         onPressed: () => _loadRecord(data),
                         icon: const Icon(Icons.edit_note),
-                        label: const Text('View/Modify Survey'),
+                        label: Text(_s.viewModifySurvey),
                         style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 24, vertical: 16),
@@ -486,7 +494,7 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
         DropdownButtonFormField<String>(
           key: ValueKey('dropdown_$fieldName${_selectedValues[fieldName]}'),
           decoration: InputDecoration(
-            hintText: 'Select $fieldName',
+            hintText: _s.selectFieldHint(fieldName),
             border: const OutlineInputBorder(),
           ),
           initialValue: _selectedValues[fieldName],

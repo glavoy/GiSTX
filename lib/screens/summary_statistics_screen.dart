@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/db_service.dart';
+import '../services/settings_service.dart';
 import '../services/survey_config_service.dart';
+import '../services/app_strings.dart';
 
 class SummaryStatisticsScreen extends StatefulWidget {
   final String surveyId;
@@ -15,11 +17,18 @@ class SummaryStatisticsScreen extends StatefulWidget {
 class _SummaryStatisticsScreenState extends State<SummaryStatisticsScreen> {
   late Future<List<Map<String, dynamic>>> _statsFuture;
   String? _resolvedSurveyId;
+  AppStrings _s = const AppStrings(false);
 
   @override
   void initState() {
     super.initState();
     _statsFuture = _loadStatistics();
+    _loadLanguage();
+  }
+
+  Future<void> _loadLanguage() async {
+    final country = await SettingsService().country;
+    if (mounted) setState(() => _s = AppStrings(country == 'Burkina Faso'));
   }
 
   Future<List<Map<String, dynamic>>> _loadStatistics() async {
@@ -95,7 +104,7 @@ class _SummaryStatisticsScreenState extends State<SummaryStatisticsScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Summary Statistics'),
+            Text(_s.summaryStatistics),
             if (_resolvedSurveyId != null)
               Text(
                 _resolvedSurveyId!,
@@ -131,7 +140,7 @@ class _SummaryStatisticsScreenState extends State<SummaryStatisticsScreen> {
                             color: Colors.red, size: 48),
                         const SizedBox(height: 16),
                         Text(
-                          'Error loading statistics',
+                          _s.errorLoadingStatistics,
                           style: theme.textTheme.titleMedium,
                         ),
                         const SizedBox(height: 8),
@@ -160,7 +169,7 @@ class _SummaryStatisticsScreenState extends State<SummaryStatisticsScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'No surveys found in this configuration.',
+                        _s.noSurveysFound,
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: theme.colorScheme.secondary.withValues(alpha: 0.7),
                         ),
@@ -213,7 +222,7 @@ class _SummaryStatisticsScreenState extends State<SummaryStatisticsScreen> {
                             children: [
                               _buildStatItem(
                                 theme,
-                                'Completed Today',
+                                _s.completedToday,
                                 item['todayCount'].toString(),
                                 Icons.today_outlined,
                                 theme.colorScheme.primary,
@@ -221,7 +230,7 @@ class _SummaryStatisticsScreenState extends State<SummaryStatisticsScreen> {
                               const SizedBox(width: 16),
                               _buildStatItem(
                                 theme,
-                                'Total Completed',
+                                _s.totalCompleted,
                                 item['totalCount'].toString(),
                                 Icons.summarize_outlined,
                                 theme.colorScheme.secondary,
