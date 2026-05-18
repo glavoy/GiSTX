@@ -554,7 +554,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
             // Duplicate found!
             _showDuplicateErrorDialog(q.fieldName);
             // Don't clear the answer, but set logic error to prevent proceeding
-            _logicError = 'A record with this ID already exists.';
+            _logicError = _s.duplicateRecordMessage;
           }
         }
       }
@@ -1022,7 +1022,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
         }
 
         if (snap.hasError) {
-          return Scaffold(body: Center(child: Text('Error: ${snap.error}')));
+          return Scaffold(body: Center(child: Text('${_s.error}: ${snap.error}')));
         }
 
         final questions = snap.data!;

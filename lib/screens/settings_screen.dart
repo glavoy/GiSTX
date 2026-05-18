@@ -127,7 +127,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(_s.settings),
         actions: [
           if (_appVersion.isNotEmpty)
             Padding(
@@ -217,7 +217,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const Divider(),
                     const SizedBox(height: 12),
                     Text(
-                      'Select Country / Sélectionner un pays',
+                      _s.selectCountry,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),

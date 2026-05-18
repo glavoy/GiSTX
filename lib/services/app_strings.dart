@@ -2,6 +2,9 @@ class AppStrings {
   final bool isFrench;
   const AppStrings(this.isFrench);
 
+  // ── Common ───────────────────────────────────────────────────────────────
+  String get error => isFrench ? 'Erreur' : 'Error';
+
   // ── Main Screen ──────────────────────────────────────────────────────────
   String get currentProject => isFrench ? 'PROJET ACTUEL' : 'CURRENT PROJECT';
   String get newSurvey => isFrench ? 'Nouveau Questionnaire' : 'New Survey';
@@ -93,6 +96,37 @@ class AppStrings {
       : 'Uploaded $filename successfully!';
   String errorUploading(Object e) =>
       isFrench ? 'Erreur lors du téléversement: $e' : 'Error uploading: $e';
+  String get failedToConnectFtp => isFrench
+      ? 'Impossible de se connecter au serveur FTP.'
+      : 'Failed to connect to FTP server.';
+  String get connectionLost =>
+      isFrench ? 'Connexion perdue.' : 'Connection lost.';
+  String get downloadFailed =>
+      isFrench ? 'Échec du téléchargement.' : 'Download failed.';
+  String get connectionFailed =>
+      isFrench ? 'Échec de la connexion.' : 'Connection failed.';
+  String get uploadFailed =>
+      isFrench ? 'Échec du téléversement.' : 'Upload failed.';
+  String get missingSettings => isFrench
+      ? 'Paramètres manquants (Identifiant Enquêteur ou Projet Actif).'
+      : 'Missing settings (Surveyor ID or Active Survey).';
+  String couldNotFindSurveyId(String name) => isFrench
+      ? "Impossible de trouver l'identifiant du questionnaire: $name"
+      : 'Could not find ID for survey: $name';
+  String get noCredentialsForSurvey => isFrench
+      ? 'Aucun identifiant disponible pour ce questionnaire.'
+      : 'No credentials available for this survey.';
+  String couldNotLoadManifest(String name) => isFrench
+      ? 'Impossible de charger le manifeste du questionnaire: $name'
+      : 'Could not load survey manifest for: $name';
+  String noDatabaseNameInManifest(String name) => isFrench
+      ? 'Aucun databaseName trouvé dans le manifeste pour: $name'
+      : 'No databaseName found in manifest for: $name';
+  String databaseFileNotFound(String path) => isFrench
+      ? 'Fichier de base de données introuvable: $path'
+      : 'Database file not found: $path';
+  String get lastUpload =>
+      isFrench ? 'Dernier téléversement' : 'Last upload';
 
   // ── Settings ──────────────────────────────────────────────────────────────
   String get settings => isFrench ? 'Paramètres' : 'Settings';
@@ -147,6 +181,8 @@ class AppStrings {
   String errorDeletingSurvey(Object e) => isFrench
       ? 'Erreur lors de la suppression: $e'
       : 'Error deleting survey: $e';
+  String get selectCountry =>
+      isFrench ? 'Sélectionner un pays' : 'Select Country';
 
   // ── Questionnaire Selector ────────────────────────────────────────────────
   String get selectQuestionnaire =>

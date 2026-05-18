@@ -120,7 +120,7 @@ class _SyncScreenState extends State<SyncScreen> {
 
       final connected = await _ftpService.connect(username, password);
       if (!connected) {
-        throw Exception('Failed to connect to FTP server.');
+        throw Exception(_s.failedToConnectFtp);
       }
 
       setState(() => _statusMessage = _s.connectingToServer);
@@ -133,7 +133,7 @@ class _SyncScreenState extends State<SyncScreen> {
             : _s.foundSurveys(files.length);
       });
     } catch (e) {
-      setState(() => _statusMessage = 'Error: $e');
+      setState(() => _statusMessage = '${_s.error}: $e');
     } finally {
       await _ftpService.disconnect();
       if (mounted) {
@@ -154,7 +154,7 @@ class _SyncScreenState extends State<SyncScreen> {
       if (username == null || password == null) return;
 
       final connected = await _ftpService.connect(username, password);
-      if (!connected) throw Exception('Connection lost.');
+      if (!connected) throw Exception(_s.connectionLost);
 
       final file = await _ftpService.downloadSurveyZip(filename);
 
@@ -173,7 +173,7 @@ class _SyncScreenState extends State<SyncScreen> {
           );
         }
       } else {
-        throw Exception('Download failed.');
+        throw Exception(_s.downloadFailed);
       }
     } catch (e) {
       if (mounted) {
@@ -226,18 +226,18 @@ class _SyncScreenState extends State<SyncScreen> {
       final surveyName = await _settingsService.activeSurvey;
 
       if (surveyorId == null || surveyName == null) {
-        throw Exception('Missing settings (Surveyor ID or Active Survey).');
+        throw Exception(_s.missingSettings);
       }
 
       // 1. Get Survey ID and DB Path
       final surveyId = await _surveyConfig.getSurveyId(surveyName);
       if (surveyId == null)
-        throw Exception('Could not find ID for survey: $surveyName');
+        throw Exception(_s.couldNotFindSurveyId(surveyName));
 
       // 2. Get credentials for THIS survey (survey-specific or falls back to global)
       final credentials = await _settingsService.getCredentialsForSurvey(surveyId);
       if (credentials == null) {
-        throw Exception('No credentials available for this survey.');
+        throw Exception(_s.noCredentialsForSurvey);
       }
 
       final username = credentials['username']!;
@@ -246,12 +246,12 @@ class _SyncScreenState extends State<SyncScreen> {
       // 3. Get DB Path from manifest
       final manifest = await _surveyConfig.getActiveSurveyManifest();
       if (manifest == null) {
-        throw Exception('Could not load survey manifest for: $surveyName');
+        throw Exception(_s.couldNotLoadManifest(surveyName));
       }
 
       final dbName = manifest['databaseName'] as String?;
       if (dbName == null) {
-        throw Exception('No databaseName found in manifest for: $surveyName');
+        throw Exception(_s.noDatabaseNameInManifest(surveyName));
       }
 
       final baseDir = await _surveyConfig.getSurveysDirectory();
@@ -261,7 +261,7 @@ class _SyncScreenState extends State<SyncScreen> {
       final dbFile = File(dbPath);
 
       if (!await dbFile.exists()) {
-        throw Exception('Database file not found: $dbPath');
+        throw Exception(_s.databaseFileNotFound(dbPath));
       }
 
       // 4. Create Zip
@@ -298,7 +298,7 @@ class _SyncScreenState extends State<SyncScreen> {
       }
 
       final connected = await _ftpService.connect(username, password);
-      if (!connected) throw Exception('Connection failed.');
+      if (!connected) throw Exception(_s.connectionFailed);
 
       final success = await _ftpService.uploadFile(zipFile, zipFilename);
 
@@ -314,7 +314,7 @@ class _SyncScreenState extends State<SyncScreen> {
           _loadLastUploadTime();
         }
       } else {
-        throw Exception('Upload failed.');
+        throw Exception(_s.uploadFailed);
       }
 
       // Cleanup - We keep the file in outbox now
@@ -488,7 +488,7 @@ class _SyncScreenState extends State<SyncScreen> {
             const SizedBox(height: 8),
             Text(
               _lastUploadTime != null
-                  ? '${_s.isFrench ? 'Dernier téléversement' : 'Last upload'}: ${DateFormat('MMM d, yyyy HH:mm').format(_lastUploadTime!)}'
+                  ? '${_s.lastUpload}: ${DateFormat('MMM d, yyyy HH:mm').format(_lastUploadTime!)}'
                   : _s.noUploadsYet,
               textAlign: TextAlign.center,
               style: TextStyle(
