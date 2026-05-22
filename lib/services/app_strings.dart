@@ -44,19 +44,20 @@ class AppStrings {
       isFrench ? 'Statistiques Récapitulatives' : 'Summary Statistics';
   String get completedToday =>
       isFrench ? "Complétés Aujourd'hui" : 'Completed Today';
-  String get totalCompleted =>
-      isFrench ? 'Total Complété' : 'Total Completed';
+  String get totalCompleted => isFrench ? 'Total Complété' : 'Total Completed';
   String get noSurveysFound => isFrench
       ? 'Aucun questionnaire trouvé dans cette configuration.'
       : 'No surveys found in this configuration.';
-  String get errorLoadingStatistics =>
-      isFrench ? 'Erreur de chargement des statistiques' : 'Error loading statistics';
+  String get errorLoadingStatistics => isFrench
+      ? 'Erreur de chargement des statistiques'
+      : 'Error loading statistics';
 
   // ── Sync Center ───────────────────────────────────────────────────────────
   String get syncCenter =>
       isFrench ? 'Centre de Synchronisation' : 'Sync Center';
-  String get getNewUpdatedSurveys =>
-      isFrench ? 'Obtenir les Nouveaux Questionnaires' : 'Get New/Updated Surveys';
+  String get getNewUpdatedSurveys => isFrench
+      ? 'Obtenir les Nouveaux Questionnaires'
+      : 'Get New/Updated Surveys';
   String get connectToServerDescription => isFrench
       ? 'Connectez-vous au serveur pour vérifier les nouveaux formulaires ou mis à jour.'
       : 'Connect to the server to check for new or updated survey forms.';
@@ -65,17 +66,22 @@ class AppStrings {
   String get connecting => isFrench ? 'Connexion...' : 'Connecting...';
   String get connectingToServer =>
       isFrench ? 'Connexion au serveur...' : 'Connecting to server...';
-  String get uploadData =>
-      isFrench ? 'Téléverser les Données' : 'Upload Data';
+  String get uploadData => isFrench ? 'Téléverser les Données' : 'Upload Data';
   String get uploadFinalizedRecords => isFrench
       ? 'Téléversez les enregistrements finalisés vers le serveur.'
       : 'Upload finalized records to the server.';
   String get uploading => isFrench ? 'Téléversement...' : 'Uploading...';
   String get uploadingData =>
       isFrench ? 'Téléversement des données...' : 'Uploading data...';
-  String uploadSurvey(String? name) =>
-      isFrench ? 'Téléverser ${name ?? "les Données"}' : 'Upload ${name ?? "Data"}';
-  String get noUploadsYet => isFrench ? 'Aucun téléversement' : 'No uploads yet';
+  String uploadSurvey(String? name) => isFrench
+      ? 'Téléverser ${name ?? "les Données"}'
+      : 'Upload ${name ?? "Data"}';
+  String get noUploadsYet => isFrench
+      ? 'Aucun paquet de téléversement local'
+      : 'No local upload packages yet';
+  String get lastLocalUploadPackage => isFrench
+      ? 'Dernier paquet de téléversement local'
+      : 'Last local upload package';
   String get configureFtpFirst => isFrench
       ? "Veuillez d'abord configurer les identifiants FTP dans les Paramètres."
       : 'Please configure FTP credentials in Settings first.';
@@ -125,8 +131,7 @@ class AppStrings {
   String databaseFileNotFound(String path) => isFrench
       ? 'Fichier de base de données introuvable: $path'
       : 'Database file not found: $path';
-  String get lastUpload =>
-      isFrench ? 'Dernier téléversement' : 'Last upload';
+  String get lastUpload => isFrench ? 'Dernier téléversement' : 'Last upload';
 
   // ── Settings ──────────────────────────────────────────────────────────────
   String get settings => isFrench ? 'Paramètres' : 'Settings';
@@ -135,12 +140,13 @@ class AppStrings {
   String get darkMode => isFrench ? 'Mode Sombre' : 'Dark Mode';
   String get userSettings =>
       isFrench ? 'Paramètres Utilisateur' : 'User Settings';
-  String get surveyorId =>
-      isFrench ? 'Identifiant Enquêteur' : 'Surveyor ID';
-  String get enterSurveyorId =>
-      isFrench ? 'Entrez votre identifiant enquêteur' : 'Enter your surveyor ID';
-  String get surveyorIdRequired =>
-      isFrench ? "L'identifiant enquêteur est requis" : 'Surveyor ID is required';
+  String get surveyorId => isFrench ? 'Identifiant Enquêteur' : 'Surveyor ID';
+  String get enterSurveyorId => isFrench
+      ? 'Entrez votre identifiant enquêteur'
+      : 'Enter your surveyor ID';
+  String get surveyorIdRequired => isFrench
+      ? "L'identifiant enquêteur est requis"
+      : 'Surveyor ID is required';
   String get serverCredentials =>
       isFrench ? 'Identifiants Serveur' : 'Server Credentials';
   String get serverCredentialsDescription => isFrench
@@ -247,8 +253,9 @@ class AppStrings {
           'Please complete a $table questionnaire first.';
   String errorLoadingIds(Object e) =>
       isFrench ? 'Erreur de chargement des IDs: $e' : 'Error loading IDs: $e';
-  String selectFieldTitle(String field) =>
-      isFrench ? 'Sélectionner ${field.toUpperCase()}' : 'Select ${field.toUpperCase()}';
+  String selectFieldTitle(String field) => isFrench
+      ? 'Sélectionner ${field.toUpperCase()}'
+      : 'Select ${field.toUpperCase()}';
   String selectFieldInstruction(String field) => isFrench
       ? 'Sélectionnez le ${field.toUpperCase()} pour ce questionnaire:'
       : 'Select the ${field.toUpperCase()} for this questionnaire:';
@@ -280,8 +287,7 @@ class AppStrings {
       ? 'Un enregistrement avec cet ID existe déjà. Veuillez entrer un ID unique.'
       : 'A record with this ID already exists. Please enter a unique ID.';
   String get ok => 'OK';
-  String get noChanges =>
-      isFrench ? 'Aucune Modification' : 'No Changes';
+  String get noChanges => isFrench ? 'Aucune Modification' : 'No Changes';
   String get noChangesMessage => isFrench
       ? "Aucune modification n'a été apportée à cet enregistrement."
       : 'No changes were made to this record.';
@@ -306,12 +312,12 @@ class AppStrings {
   String get continueLabel => isFrench ? 'Continuer' : 'Continue';
   String get incompleteData =>
       isFrench ? 'Données Incomplètes' : 'Incomplete Data';
-  String incompleteDataMessage(int expected, String displayName, int actual) =>
-      isFrench
-          ? 'Vous avez indiqué $expected ${expected == 1 ? 'enregistrement' : 'enregistrements'} pour $displayName mais seulement $actual ${actual == 1 ? 'a été ajouté' : 'ont été ajoutés'}.\n\nCela causera des problèmes de qualité des données.'
-          : 'You indicated $expected ${expected == 1 ? 'record' : 'records'} for $displayName but only added $actual.\n\nThis will cause data quality issues.';
-  String updateCountTo(int actual) =>
-      isFrench ? 'Mettre à jour le compte à $actual' : 'Update Count to $actual';
+  String incompleteDataMessage(int expected, String displayName, int actual) => isFrench
+      ? 'Vous avez indiqué $expected ${expected == 1 ? 'enregistrement' : 'enregistrements'} pour $displayName mais seulement $actual ${actual == 1 ? 'a été ajouté' : 'ont été ajoutés'}.\n\nCela causera des problèmes de qualité des données.'
+      : 'You indicated $expected ${expected == 1 ? 'record' : 'records'} for $displayName but only added $actual.\n\nThis will cause data quality issues.';
+  String updateCountTo(int actual) => isFrench
+      ? 'Mettre à jour le compte à $actual'
+      : 'Update Count to $actual';
   String get allDone => isFrench ? 'Terminé!' : 'All done!';
   String get recordUpdatedSuccess => isFrench
       ? 'Merci! Enregistrement mis à jour avec succès.'
@@ -339,12 +345,12 @@ class AppStrings {
   // ── Review Changes dialog ─────────────────────────────────────────────────
   String get reviewChanges =>
       isFrench ? 'Réviser les Modifications' : 'Review Changes';
-  String get noChangesDetected =>
-      isFrench ? 'Aucune modification détectée.' : 'No logical changes detected.';
+  String get noChangesDetected => isFrench
+      ? 'Aucune modification détectée.'
+      : 'No logical changes detected.';
   String get discardAndExit =>
       isFrench ? 'Annuler & Quitter' : 'Discard & Exit';
-  String get backToEdit =>
-      isFrench ? "Retour à l'Édition" : 'Back to Edit';
+  String get backToEdit => isFrench ? "Retour à l'Édition" : 'Back to Edit';
   String get saveChanges =>
       isFrench ? 'Enregistrer les Modifications' : 'Save Changes';
   String get discardChangesTitle =>
