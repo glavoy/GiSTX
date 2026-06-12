@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:ftpconnect/ftpconnect.dart';
+import 'package:dartssh2/dartssh2.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'settings_service.dart';
@@ -53,8 +54,14 @@ class FtpUploadResult {
 }
 
 class FtpService {
+  // FTP connection (Uganda)
   FTPConnect? _ftpConnect;
+  // SFTP connection (Burkina Faso)
+  SSHClient? _sshClient;
+  SftpClient? _sftpClient;
+
   String _pathPrefix = '';
+  bool get _usesSftp => _sftpClient != null;
 
   static ({String host, int port, String pathPrefix}) _countryConfig(
       String country) {
@@ -67,24 +74,63 @@ class FtpService {
   String get _uploadDirectory =>
       _pathPrefix.isEmpty ? '/data' : '/$_pathPrefix/data';
 
-  /// Connect to the FTP server
+  /// Connect to the server (SFTP for Burkina Faso, FTP for Uganda)
   Future<bool> connect(String username, String password) async {
     final country = await SettingsService().country;
     final config = _countryConfig(country);
     _pathPrefix = config.pathPrefix;
-    _ftpConnect = FTPConnect(config.host,
-        user: username, pass: password, port: config.port);
-    try {
-      await _ftpConnect!.connect();
-      return true;
-    } catch (e) {
-      debugPrint('[FtpService] Connection failed: $e');
-      return false;
+
+    if (country == 'Burkina Faso') {
+      try {
+        final socket = await SSHSocket.connect(config.host, config.port);
+        _sshClient = SSHClient(
+          socket,
+          username: username,
+          onPasswordRequest: () => password,
+        );
+        await _sshClient!.authenticated;
+        _sftpClient = await _sshClient!.sftp();
+        return true;
+      } catch (e) {
+        debugPrint('[FtpService] SFTP connection failed: $e');
+        _sshClient?.close();
+        _sshClient = null;
+        _sftpClient = null;
+        return false;
+      }
+    } else {
+      _ftpConnect = FTPConnect(config.host,
+          user: username, pass: password, port: config.port);
+      try {
+        await _ftpConnect!.connect();
+        return true;
+      } catch (e) {
+        debugPrint('[FtpService] FTP connection failed: $e');
+        return false;
+      }
     }
   }
 
   /// List zip files in the /survey/ directory
   Future<List<String>> listSurveyZips() async {
+    if (_usesSftp) {
+      try {
+        final dir =
+            _pathPrefix.isEmpty ? '/survey' : '/$_pathPrefix/survey';
+        final items = await _sftpClient!.listdir(dir);
+        return items
+            .where((item) =>
+                item.filename.toLowerCase().endsWith('.zip') &&
+                item.filename != '.' &&
+                item.filename != '..')
+            .map((item) => item.filename)
+            .toList();
+      } catch (e) {
+        debugPrint('[FtpService] SFTP list failed: $e');
+        return [];
+      }
+    }
+
     if (_ftpConnect == null) return [];
     try {
       if (_pathPrefix.isNotEmpty)
@@ -99,39 +145,52 @@ class FtpService {
           .map((entry) => entry.name!)
           .toList();
     } catch (e) {
-      debugPrint('[FtpService] List failed: $e');
+      debugPrint('[FtpService] FTP list failed: $e');
       return [];
     }
   }
 
   /// Download a specific zip file to the local zips folder
   Future<File?> downloadSurveyZip(String filename) async {
-    if (_ftpConnect == null) return null;
-    try {
-      // Get local zips directory
-      Directory baseDir;
-      if (Platform.isAndroid) {
-        baseDir = await getExternalStorageDirectory() ??
-            await getApplicationSupportDirectory();
-      } else if (Platform.isWindows) {
-        // Windows: Use LOCALAPPDATA for AppData\Local
-        final localAppData = Platform.environment['LOCALAPPDATA'];
-        if (localAppData != null) {
-          baseDir = Directory(localAppData);
-        } else {
-          baseDir = await getApplicationSupportDirectory();
-        }
+    // Resolve local destination regardless of protocol
+    Directory baseDir;
+    if (Platform.isAndroid) {
+      baseDir = await getExternalStorageDirectory() ??
+          await getApplicationSupportDirectory();
+    } else if (Platform.isWindows) {
+      final localAppData = Platform.environment['LOCALAPPDATA'];
+      if (localAppData != null) {
+        baseDir = Directory(localAppData);
       } else {
-        // Linux/Mac
         baseDir = await getApplicationSupportDirectory();
       }
-      final zipsDir = Directory(p.join(baseDir.path, 'GiSTX', 'zips'));
-      if (!await zipsDir.exists()) {
-        await zipsDir.create(recursive: true);
+    } else {
+      baseDir = await getApplicationSupportDirectory();
+    }
+    final zipsDir = Directory(p.join(baseDir.path, 'GiSTX', 'zips'));
+    if (!await zipsDir.exists()) {
+      await zipsDir.create(recursive: true);
+    }
+    final localFile = File(p.join(zipsDir.path, filename));
+
+    if (_usesSftp) {
+      try {
+        final remotePath =
+            _pathPrefix.isEmpty ? '/survey/$filename' : '/$_pathPrefix/survey/$filename';
+        final remoteFile =
+            await _sftpClient!.open(remotePath, mode: SftpFileOpenMode.read);
+        final bytes = await remoteFile.readBytes();
+        await remoteFile.close();
+        await localFile.writeAsBytes(bytes);
+        return localFile;
+      } catch (e) {
+        debugPrint('[FtpService] SFTP download failed: $e');
+        return null;
       }
+    }
 
-      final localFile = File(p.join(zipsDir.path, filename));
-
+    if (_ftpConnect == null) return null;
+    try {
       // Ensure we are in the right directory on server
       if (_pathPrefix.isNotEmpty)
         await _ftpConnect!.changeDirectory(_pathPrefix);
@@ -140,7 +199,7 @@ class FtpService {
       await _ftpConnect!.downloadFile(filename, localFile);
       return localFile;
     } catch (e) {
-      debugPrint('[FtpService] Download failed: $e');
+      debugPrint('[FtpService] FTP download failed: $e');
       return null;
     }
   }
@@ -149,6 +208,16 @@ class FtpService {
   Future<FtpUploadResult> uploadFile(File file, String remoteFilename) async {
     final localBytes = await file.length();
     final remoteDirectory = _uploadDirectory;
+
+    if (_usesSftp) {
+      return _sftpUploadAndVerify(
+        file: file,
+        remoteFilename: remoteFilename,
+        remoteDirectory: remoteDirectory,
+        localBytes: localBytes,
+      );
+    }
+
     if (_ftpConnect == null) {
       return FtpUploadResult(
         success: false,
@@ -213,10 +282,91 @@ class FtpService {
         supportIPV6: false,
       );
     } catch (e) {
-      debugPrint('[FtpService] Upload failed: $e');
+      debugPrint('[FtpService] FTP upload failed: $e');
       return FtpUploadResult(
         success: false,
         stage: FtpUploadStage.upload,
+        remoteDirectory: remoteDirectory,
+        remoteFilename: remoteFilename,
+        localBytes: localBytes,
+        remoteBytes: null,
+        message: e.toString(),
+      );
+    }
+  }
+
+  Future<FtpUploadResult> _sftpUploadAndVerify({
+    required File file,
+    required String remoteFilename,
+    required String remoteDirectory,
+    required int localBytes,
+  }) async {
+    final remotePath = '$remoteDirectory/$remoteFilename';
+    try {
+      final bytes = await file.readAsBytes();
+      final remoteFile = await _sftpClient!.open(
+        remotePath,
+        mode: SftpFileOpenMode.write |
+            SftpFileOpenMode.create |
+            SftpFileOpenMode.truncate,
+      );
+      await remoteFile.writeBytes(bytes);
+      await remoteFile.close();
+    } catch (e) {
+      debugPrint('[FtpService] SFTP upload transfer failed: $e');
+      return FtpUploadResult(
+        success: false,
+        stage: FtpUploadStage.upload,
+        remoteDirectory: remoteDirectory,
+        remoteFilename: remoteFilename,
+        localBytes: localBytes,
+        remoteBytes: null,
+        message: e.toString(),
+      );
+    }
+
+    // Verify by size
+    try {
+      final attrs = await _sftpClient!.stat(remotePath);
+      final remoteBytes = attrs.size;
+      if (remoteBytes == null) {
+        return FtpUploadResult(
+          success: false,
+          stage: FtpUploadStage.verifyFilename,
+          remoteDirectory: remoteDirectory,
+          remoteFilename: remoteFilename,
+          localBytes: localBytes,
+          remoteBytes: null,
+          message: '$remoteFilename was not found in $remoteDirectory.',
+        );
+      }
+      if (remoteBytes != localBytes) {
+        return FtpUploadResult(
+          success: false,
+          stage: FtpUploadStage.verifySize,
+          remoteDirectory: remoteDirectory,
+          remoteFilename: remoteFilename,
+          localBytes: localBytes,
+          remoteBytes: remoteBytes,
+          message:
+              '$remoteFilename exists in $remoteDirectory but is $remoteBytes bytes; expected $localBytes bytes.',
+        );
+      }
+      debugPrint('[FtpService] SFTP verified upload: $remotePath ($remoteBytes bytes)');
+      return FtpUploadResult(
+        success: true,
+        stage: FtpUploadStage.verifySize,
+        remoteDirectory: remoteDirectory,
+        remoteFilename: remoteFilename,
+        localBytes: localBytes,
+        remoteBytes: remoteBytes,
+        message: 'Verified $remotePath ($remoteBytes bytes).',
+      );
+    } catch (e) {
+      debugPrint('[FtpService] SFTP verify failed: $e');
+      return FtpUploadResult(
+        success: false,
+        stage: FtpUploadStage.verifyFilename,
         remoteDirectory: remoteDirectory,
         remoteFilename: remoteFilename,
         localBytes: localBytes,
@@ -292,13 +442,20 @@ class FtpService {
     );
   }
 
-  /// Disconnect from the FTP server
+  /// Disconnect from the server
   Future<void> disconnect() async {
+    if (_sftpClient != null) {
+      _sftpClient = null;
+    }
+    if (_sshClient != null) {
+      _sshClient!.close();
+      _sshClient = null;
+    }
     if (_ftpConnect != null) {
       try {
         await _ftpConnect!.disconnect();
       } catch (e) {
-        debugPrint('[FtpService] Disconnect failed: $e');
+        debugPrint('[FtpService] FTP disconnect failed: $e');
       }
       _ftpConnect = null;
     }
