@@ -59,7 +59,7 @@ class FtpService {
   static ({String host, int port, String pathPrefix}) _countryConfig(
       String country) {
     if (country == 'Burkina Faso') {
-      return (host: 'ftp.crundata.net', port: 2121, pathPrefix: 'r21');
+      return (host: 'ftp.crundata.net', port: 2220, pathPrefix: 'r21');
     }
     return (host: '0f7a55b.netsolhost.com', port: 21, pathPrefix: '');
   }
