@@ -2,12 +2,6 @@
 
 This is the **general-purpose English-only** version of GiSTX. It connects to a single FTP server and displays all text in English.
 
-| Setting | Value |
-|---|---|
-| Language | English |
-| Protocol | FTP |
-| Server | 0f7a55b.netsolhost.com:21 |
-
 See the **burkinafaso** branch for the bilingual (English / French) dual-server version used for the R21 Negative study across Uganda and Burkina Faso.
 
 ---
