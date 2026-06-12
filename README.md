@@ -1,6 +1,16 @@
-# GiSTX
+# GiSTX — burkinafaso branch
 
-This bracnch is for the R21 Negative study
+This branch supports the **R21 Negative study** running across two countries: **Uganda** and **Burkina Faso**. It is bilingual (English / French) and connects to two different servers depending on the country selected in Settings.
+
+| Setting | Uganda | Burkina Faso |
+|---|---|---|
+| Language | English | French |
+| Protocol | FTP | SFTP |
+| Server | 0f7a55b.netsolhost.com:21 | ftp.crundata.net:2220 |
+
+See the **main** branch for the single-country English-only version.
+
+---
 
 ## Overview
 
@@ -31,5 +41,3 @@ GiSTX is a cross-platform offline survey and data collection application built w
 - **Database**: SQLite with automatic schema synchronization
 - **Platforms**: Windows, macOS, Linux, Android, iOS
 - **Survey Definition**: XML
-
-
