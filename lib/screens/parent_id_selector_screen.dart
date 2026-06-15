@@ -1,7 +1,11 @@
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import '../services/db_service.dart';
 import 'survey_screen.dart';
 import '../services/survey_config_service.dart';
+import '../services/question_cache_service.dart';
 
 /// Screen for selecting a parent ID before starting a linked questionnaire
 ///
@@ -15,6 +19,7 @@ class ParentIdSelectorScreen extends StatefulWidget {
   final String? incrementField;
   final String? idConfig;
   final String? entryCondition;
+  final String? displayFields;
 
   const ParentIdSelectorScreen({
     super.key,
@@ -24,6 +29,7 @@ class ParentIdSelectorScreen extends StatefulWidget {
     this.incrementField,
     this.idConfig,
     this.entryCondition,
+    this.displayFields,
   });
 
   @override
@@ -37,6 +43,9 @@ class _ParentIdSelectorScreenState extends State<ParentIdSelectorScreen> {
   String? _errorMessage;
   final TextEditingController _searchController = TextEditingController();
   List<String> _filteredIds = [];
+
+  /// Display-field subtitle text per linking value (e.g. participant's name)
+  final Map<String, String> _subtitleByLinkingValue = {};
 
   @override
   void initState() {
@@ -68,6 +77,18 @@ class _ParentIdSelectorScreenState extends State<ParentIdSelectorScreen> {
           await DbService.getExistingRecords(surveyId, widget.parentTable);
 
       final uniqueIds = <String>{};
+      // Keep the (normalized) parent record per linking value so we can show
+      // display_fields (e.g. the participant's name) next to each ID.
+      final Map<String, Map<String, dynamic>> recordByValue = {};
+      _subtitleByLinkingValue.clear();
+
+      // Parse the configured display fields (same format as record selector)
+      final displayFields = widget.displayFields
+              ?.split(',')
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .toList() ??
+          [];
 
       // Parse entry condition if present
       String? conditionField;
@@ -97,7 +118,33 @@ class _ParentIdSelectorScreenState extends State<ParentIdSelectorScreen> {
 
         final val = normalizedRecord[widget.linkingField.toLowerCase()];
         if (val != null && val.toString().isNotEmpty) {
-          uniqueIds.add(val.toString());
+          final id = val.toString();
+          if (uniqueIds.add(id)) {
+            // First record wins for a given linking value
+            recordByValue[id] = normalizedRecord;
+          }
+        }
+      }
+
+      // Build the display-field subtitles (resolved against the parent record)
+      if (displayFields.isNotEmpty) {
+        await _ensureQuestionCacheLoaded(surveyId);
+        final questionCache = QuestionCacheService();
+        for (final entry in recordByValue.entries) {
+          final parts = <String>[];
+          for (final field in displayFields) {
+            // Skip the linking field itself - it is already shown as the title
+            final plainName =
+                RegExp(r'^\[\[(.+?)\]\]$').firstMatch(field)?.group(1) ?? field;
+            if (plainName.toLowerCase() == widget.linkingField.toLowerCase()) {
+              continue;
+            }
+            final value = questionCache.getDisplayValue(field, entry.value);
+            if (value.isNotEmpty) parts.add(value);
+          }
+          if (parts.isNotEmpty) {
+            _subtitleByLinkingValue[entry.key] = parts.join(', ');
+          }
         }
       }
 
@@ -127,15 +174,53 @@ class _ParentIdSelectorScreenState extends State<ParentIdSelectorScreen> {
     }
   }
 
+  /// Ensures the question cache is loaded so [[fieldname]] display values
+  /// can be resolved to their option labels. Mirrors RecordSelectorScreen.
+  Future<void> _ensureQuestionCacheLoaded(String surveyId) async {
+    final questionCache = QuestionCacheService();
+    if (questionCache.isLoadedForSurvey(surveyId)) return;
+
+    final surveyConfig = SurveyConfigService();
+    final manifest = await surveyConfig.getActiveSurveyManifest();
+    if (manifest == null) return;
+
+    final xmlFiles = (manifest['xmlFiles'] as List?)?.cast<String>() ?? [];
+
+    // Find the survey directory that matches the active survey
+    final surveysDir = await surveyConfig.getSurveysDirectory();
+    final entities = await surveysDir.list().toList();
+    for (final entity in entities) {
+      if (entity is Directory) {
+        final manifestFile =
+            File(p.join(entity.path, 'survey_manifest.gistx'));
+        if (await manifestFile.exists()) {
+          final dirManifest = jsonDecode(await manifestFile.readAsString());
+          if (dirManifest['surveyId'] == surveyId) {
+            await questionCache.loadQuestionsForSurvey(
+              surveyId: surveyId,
+              surveyDirectory: entity.path,
+              xmlFiles: xmlFiles,
+            );
+            break;
+          }
+        }
+      }
+    }
+  }
+
   /// Filters the ID list based on search text
   void _filterIds(String searchText) {
     setState(() {
       if (searchText.isEmpty) {
         _filteredIds = List.from(_availableIds);
       } else {
-        _filteredIds = _availableIds
-            .where((id) => id.toLowerCase().contains(searchText.toLowerCase()))
-            .toList();
+        final query = searchText.toLowerCase();
+        _filteredIds = _availableIds.where((id) {
+          if (id.toLowerCase().contains(query)) return true;
+          // Also match the display-field subtitle (e.g. participant's name)
+          final subtitle = _subtitleByLinkingValue[id];
+          return subtitle != null && subtitle.toLowerCase().contains(query);
+        }).toList();
       }
     });
   }
@@ -209,6 +294,41 @@ class _ParentIdSelectorScreenState extends State<ParentIdSelectorScreen> {
       debugPrint('Error getting next increment: $e');
       return 1;
     }
+  }
+
+  /// Builds the list-item subtitle: the configured display_fields text
+  /// (e.g. the participant's name) and, for repeating children, the next
+  /// increment number. Returns null when there is nothing to show.
+  Widget? _buildSubtitle(String id) {
+    final displayText = _subtitleByLinkingValue[id];
+
+    final children = <Widget>[
+      if (displayText != null && displayText.isNotEmpty)
+        Text(
+          displayText,
+          style: TextStyle(color: Colors.grey[700]),
+        ),
+      if (widget.incrementField != null)
+        FutureBuilder<int>(
+          future: _getNextIncrementNumber(id),
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              return Text(
+                'Next ${widget.incrementField}: ${snapshot.data}',
+                style: TextStyle(color: Colors.grey[600]),
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+    ];
+
+    if (children.isEmpty) return null;
+    if (children.length == 1) return children.first;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    );
   }
 
   @override
@@ -313,23 +433,7 @@ class _ParentIdSelectorScreenState extends State<ParentIdSelectorScreen> {
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                      subtitle: widget.incrementField != null
-                                          ? FutureBuilder<int>(
-                                              future:
-                                                  _getNextIncrementNumber(id),
-                                              builder: (context, snapshot) {
-                                                if (snapshot.hasData) {
-                                                  return Text(
-                                                    'Next ${widget.incrementField}: ${snapshot.data}',
-                                                    style: TextStyle(
-                                                      color: Colors.grey[600],
-                                                    ),
-                                                  );
-                                                }
-                                                return const SizedBox.shrink();
-                                              },
-                                            )
-                                          : null,
+                                      subtitle: _buildSubtitle(id),
                                       trailing: const Icon(Icons.chevron_right),
                                       onTap: () => _onIdSelected(id),
                                       selected: _selectedId == id,
