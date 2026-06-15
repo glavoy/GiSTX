@@ -10,7 +10,7 @@
 	</question>
 
 
-	<question type = 'text' fieldname = 'deviceid' fieldtype = 'text_integer'>
+	<question type = 'text' fieldname = 'deviceid' fieldtype = 'integer'>
 		<text>Please enter the 3-digit device ID assigned to your phone</text>
 		<maxCharacters>=3</maxCharacters>
 		<numeric_check>
@@ -19,7 +19,7 @@
 	</question>
 
 
-	<question type = 'text' fieldname = 'deviceid2' fieldtype = 'text_integer'>
+	<question type = 'text' fieldname = 'deviceid2' fieldtype = 'integer'>
 		<text>Please re-enter your 3-digit device ID</text>
 		<maxCharacters>=3</maxCharacters>
 		<numeric_check>
@@ -31,16 +31,12 @@
 	</question>
 
 
-	<question type = 'radio' fieldname = 'mrc' fieldtype = 'integer'>
-		<text>MRC of enrollment</text>
+	<question type = 'radio' fieldname = 'country' fieldtype = 'integer'>
+		<text>Country</text>
 		<responses>
-			<response value = '110'>Busitema HC III</response>
-			<response value = '096'>Kigandalo HC IV</response>
+			<response value = '1'>Uganda</response>
+			<response value = '2'>Burkina Faso</response>
 		</responses>
-	</question>
-
-
-	<question type = 'automatic' fieldname = 'subjid' fieldtype = 'text'>
 	</question>
 
 
@@ -54,6 +50,19 @@
 		<postskip>
 			<skip fieldname='district' condition = '=' response='999' response_type='fixed' skiptofieldname ='placeofresidence'></skip>
 		</postskip>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'mrc' fieldtype = 'integer'>
+		<text>Site of enrollment</text>
+		<responses>
+			<response value = '110'>Busitema HC III</response>
+			<response value = '096'>Kigandalo HC IV</response>
+		</responses>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'subjid' fieldtype = 'text'>
 	</question>
 
 
@@ -141,7 +150,7 @@ If the exact day of month is unknown put 15th.
 
 If the exact month is unknown put the first month of the season of the year when they were born</text>
 		<date_range>
-			<min_date>-3y</min_date>
+			<min_date>-5y</min_date>
 			<max_date>-4m</max_date>
 		</date_range>
 	</question>
@@ -158,13 +167,39 @@ If the exact month is unknown put the first month of the season of the year when
 
 
 	<question type = 'automatic' fieldname = 'age_at_apr2025' fieldtype = 'integer'>
-		<calculation type='age_at_date' field='dob' value='months' separator='2025-04-01'/>
+		<calculation type='age_at_date' field='dob' value='months' separator='2025-03-31'/>
+		<preskip>
+			<skip fieldname='country' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='age_at_sep2023'></skip>
+		</preskip>
 	</question>
 
 
-	<question type = 'automatic' fieldname = 'age_in_range' fieldtype = 'integer'>
+	<question type = 'automatic' fieldname = 'age_in_range_ug' fieldtype = 'integer'>
 		<calculation type='case'>
-			<when field='agemonths_calculated' operator='&lt;' value='8'>
+			<when field='agemonths_calculated' operator='&lt;' value='5'>
+				<result type='constant' value='0' />
+			</when>
+			<when field='age_at_apr2025' operator='&gt;=' value='12'>
+				<result type='constant' value='0' />
+			</when>
+			<else>
+				<result type='constant' value='1' />
+			</else>
+		</calculation>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'age_at_sep2023' fieldtype = 'integer'>
+		<calculation type='age_at_date' field='dob' value='months' separator='2023-08-31'/>
+		<preskip>
+			<skip fieldname='country' condition = '&lt;&gt;' response='2' response_type='fixed' skiptofieldname ='age'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'age_in_range_bf' fieldtype = 'integer'>
+		<calculation type='case'>
+			<when field='agemonths_calculated' operator='&lt;' value='4'>
 				<result type='constant' value='0' />
 			</when>
 			<when field='age_at_apr2025' operator='&gt;=' value='12'>
@@ -200,34 +235,74 @@ Enter 0 if child is under 1 year old</text>
 			agemonths_calculated &lt;&gt; agemonths; 'Age in months does not match the age in months from the DOB!'
 		</logic_check>
 		<preskip>
-			<skip fieldname='age' condition = '&lt;&gt;' response='0' response_type='fixed' skiptofieldname ='age_eligible'></skip>
+			<skip fieldname='age' condition = '&lt;&gt;' response='0' response_type='fixed' skiptofieldname ='age_eligible_ug'></skip>
 		</preskip>
 	</question>
 
 
-	<question type = 'radio' fieldname = 'age_eligible' fieldtype = 'integer'>
+	<question type = 'radio' fieldname = 'age_eligible_ug' fieldtype = 'integer'>
 		<text>Age eligibility:
 
 Age in Years: [[age]]
 Age in Months: [[agemonths_calculated]]
 
-Age in months on April 1, 2025: [[age_at_apr2025]]
+Age in months on March 31, 2025: [[age_at_apr2025]]
 
-Individual is 8 months or older at time of enrollment (today) AND was younger than 1 year (12 months) on April 1st, 2025</text>
+Individual is 6 months or older at time of enrollment (today) AND was younger than 1 year (12 months) on April 1st, 2025</text>
 		<logic_check>
-			age_in_range = 1 and age_eligible = 0; 'Participant is within the age range and must be marked as age eligible!'
+			age_in_range_ug = 1 and age_eligible_ug = 0; 'Participant is within the age range and must be marked as age eligible!'
 		</logic_check>
 		<responses>
 			<response value = '1'>Yes - continue to next criterium</response>
 			<response value = '0'>No - exclude</response>
 		</responses>
+		<preskip>
+			<skip fieldname='country' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='age_eligible_bf'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'age_eligible_bf' fieldtype = 'integer'>
+		<text>Age eligibility:
+
+Age in Years: [[age]]
+Age in Months: [[agemonths_calculated]]
+
+Age in months on March 31, 2025: [[age_at_apr2025]]
+
+Individual is 5 months or older at time of enrollment (today) AND was younger than 1 year (12 months) on September 1st, 2023</text>
+		<logic_check>
+			age_in_range_bf = 1 and age_eligible_bf = 0; 'Participant is within the age range and must be marked as age eligible!'
+		</logic_check>
+		<responses>
+			<response value = '1'>Yes - continue to next criterium</response>
+			<response value = '0'>No - exclude</response>
+		</responses>
+		<preskip>
+			<skip fieldname='country' condition = '&lt;&gt;' response='2' response_type='fixed' skiptofieldname ='age_eligible'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'age_eligible' fieldtype = 'integer'>
+		<calculation type='case'>
+			<when field='age_eligible_ug' operator='=' value='1'>
+				<result type='constant' value='1' />
+			</when>
+			<when field='age_eligible_bf' operator='=' value='1'>
+				<result type='constant' value='1' />
+			</when>
+			<else>
+				<result type='constant' value='0' />
+			</else>
+		</calculation>
 	</question>
 
 
 	<question type = 'radio' fieldname = 'age_warning' fieldtype = 'integer'>
 		<text>WARNING!
 
-The child's age is outside the protocol enrollment range (8 months to 22+ months shifting limit).
+The child's age is outside the protocol enrollment range.
 
 Years: [[age]]
 Months: [[agemonths_calculated]]
@@ -239,7 +314,8 @@ Do you want to proceed with enrollment anyway?</text>
 		</responses>
 		<preskip>
 			<skip fieldname='age_eligible' condition = '=' response='0' response_type='fixed' skiptofieldname ='mal_test_eligible'></skip>
-			<skip fieldname='age_in_range' condition = '=' response='1' response_type='fixed' skiptofieldname ='mal_test_eligible'></skip>
+			<skip fieldname='age_in_range_ug' condition = '=' response='1' response_type='fixed' skiptofieldname ='mal_test_eligible'></skip>
+			<skip fieldname='age_in_range_bf' condition = '=' response='1' response_type='fixed' skiptofieldname ='mal_test_eligible'></skip>
 		</preskip>
 		<postskip>
 			<skip fieldname='age_warning' condition = '=' response='0' response_type='fixed' skiptofieldname ='comments'></skip>
@@ -254,7 +330,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'mal_test_eligible' fieldtype = 'integer'>
-		<text>RDT or microscopy conducted (result can be positive or negative)</text>
+		<text>Child is present with suspected malaria and will be tested for malaria.</text>
 		<responses>
 			<response value = '1'>Yes - continue to next criterium</response>
 			<response value = '0'>No - exclude</response>
@@ -266,7 +342,7 @@ Do you want to proceed with enrollment anyway?</text>
 
 
 	<question type = 'radio' fieldname = 'ill_noteligible' fieldtype = 'integer'>
-		<text>Does the child have another non-malaria severe illness that prevents their participation?</text>
+		<text>Another non-malaria severe illness that prevents participation.</text>
 		<responses>
 			<response value = '0'>No - include</response>
 			<response value = '1'>Yes - EXCLUDE</response>
@@ -289,17 +365,63 @@ Do you want to proceed with enrollment anyway?</text>
 	</question>
 
 
-	<question type = 'text' fieldname = 'participantsname' fieldtype = 'text'>
-		<text>Participant names?</text>
+	<question type = 'radio' fieldname = 'reason_refused' fieldtype = 'integer'>
+		<text>Reason for not participating</text>
+		<responses>
+			<response value = '1'>Do not have time</response>
+			<response value = '2'>Not interested in participating</response>
+			<response value = '96'>Other (specify)</response>
+		</responses>
+		<preskip>
+			<skip fieldname='consent_eligible' condition = '=' response='1' response_type='fixed' skiptofieldname ='first_enroll'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'text' fieldname = 'reason_refused_oth' fieldtype = 'text'>
+		<text>Other:</text>
 		<maxCharacters>80</maxCharacters>
+		<preskip>
+			<skip fieldname='reason_refused' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='comments'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'first_enroll' fieldtype = 'integer'>
+		<text>A) Participant’s first enrollment in this study?</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
 		<preskip>
 			<skip fieldname='consent_eligible' condition = '=' response='0' response_type='fixed' skiptofieldname ='comments'></skip>
 		</preskip>
 	</question>
 
 
+	<question type = 'radio' fieldname = 'last_enroll_14plus' fieldtype = 'integer'>
+		<text>B) If no, was the most recent enrollment 14 or more days ago?</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+		<preskip>
+			<skip fieldname='first_enroll' condition = '=' response='1' response_type='fixed' skiptofieldname ='participantsname'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'text' fieldname = 'participantsname' fieldtype = 'text'>
+		<text>Participant names?</text>
+		<maxCharacters>80</maxCharacters>
+		<preskip>
+			<skip fieldname='last_enroll_14plus' condition = '=' response='0' response_type='fixed' skiptofieldname ='comments'></skip>
+		</preskip>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'gender' fieldtype = 'integer'>
-		<text>Gender of [[participantsname]]?</text>
+		<text>Sex of [[participantsname]]?</text>
 		<responses>
 			<response value = '1'>Male</response>
 			<response value = '2'>Female</response>
@@ -307,16 +429,106 @@ Do you want to proceed with enrollment anyway?</text>
 	</question>
 
 
-	<question type = 'radio' fieldname = 'hhheadeduclevel' fieldtype = 'integer'>
-		<text>What is education level of the household head of the house the participant lives in?</text>
+	<question type = 'radio' fieldname = 'consent' fieldtype = 'integer'>
+		<text>Does [[participantsname]]'s guardian consent to laboratory testing?</text>
 		<responses>
-			<response value = '0'>No education/Never gone to school</response>
-			<response value = '1'>Nursery</response>
-			<response value = '2'>Primary</response>
-			<response value = '3'>Secondary</response>
-			<response value = '4'>Vocational</response>
-			<response value = '5'>University and Above</response>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
 		</responses>
+		<postskip>
+			<skip fieldname='consent' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='diagnostic'></skip>
+		</postskip>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'consent2' fieldtype = 'integer'>
+		<text>Does [[participantsname]]'s guardian consent to future use of biological specimens?</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+	</question>
+
+
+	<question type = 'text' fieldname = 'uid' fieldtype = 'text'>
+		<text>Enter the UID from the REGISTER barcode  (5 digits)</text>
+		<maxCharacters>=5</maxCharacters>
+		<unique_check>
+			<message>This UID as already been used!</message>
+		</unique_check>
+	</question>
+
+
+	<question type = 'text' fieldname = 'uid2' fieldtype = 'text'>
+		<text>Please re-enter the UID from the REGISTER barcode (5 digits)</text>
+		<maxCharacters>=5</maxCharacters>
+		<logic_check>
+			uid2 &lt;&gt; uid; 'This does not match your previous entry of the UID!'
+		</logic_check>
+	</question>
+
+
+	<question type = 'text' fieldname = 'fpbarcode1_r21' fieldtype = 'text'>
+		<text>Enter R21 STUDY barcode</text>
+		<maxCharacters>=12</maxCharacters>
+		<mask value="R21-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
+		<unique_check>
+			<message>This barcode has already been used!</message>
+		</unique_check>
+	</question>
+
+
+	<question type = 'text' fieldname = 'fpbarcode2_r21' fieldtype = 'text'>
+		<text>Re-enter R21 STUDY barcode</text>
+		<maxCharacters>=12</maxCharacters>
+		<mask value="R21-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
+		<logic_check>
+			fpbarcode2_r21 &lt;&gt; fpbarcode1_r21; 'This does not match your previous entry of the barcode!'
+		</logic_check>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'enroll_immrse' fieldtype = 'integer'>
+		<text>Is [[participantsname]] also enrolled in the IMMRSE study?</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+		<preskip>
+			<skip fieldname='country' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='prev_barcode'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'text' fieldname = 'fpbarcode1_immrse' fieldtype = 'text'>
+		<text>Enter IMMRSE barcode</text>
+		<maxCharacters>=14</maxCharacters>
+		<mask value="IM-[0-9][0-9]-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
+		<unique_check>
+			<message>This barcode has already been used!</message>
+		</unique_check>
+		<preskip>
+			<skip fieldname='enroll_immrse' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='diagnostic'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'text' fieldname = 'fpbarcode2_immrse' fieldtype = 'text'>
+		<text>Re-enter IMMRSE barcode</text>
+		<maxCharacters>=14</maxCharacters>
+		<mask value="IM-[0-9][0-9]-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
+		<logic_check>
+			fpbarcode2_immrse &lt;&gt; fpbarcode1_immrse; 'This does not match your previous entry of the barcode!'
+		</logic_check>
+	</question>
+
+
+	<question type = 'text' fieldname = 'prev_barcode' fieldtype = 'text'>
+		<text>What was the barcode assigned to the participant in their last enrollment?</text>
+		<maxCharacters>15</maxCharacters>
+		<preskip>
+			<skip fieldname='last_enroll_14plus' condition = '=' response='1' response_type='fixed' skiptofieldname ='diagnostic'></skip>
+		</preskip>
 	</question>
 
 
@@ -334,7 +546,16 @@ Do you want to proceed with enrollment anyway?</text>
 		<responses>
 			<response value = '0'>Negative</response>
 			<response value = '1'>Positive</response>
-			<response value = '3'>Indeterminate</response>
+		</responses>
+	</question>
+
+
+	<question type = 'checkbox' fieldname = 'symptoms' fieldtype = 'text'>
+		<text>Which of the following symptoms did the patient have within the last 48 hours?</text>
+		<responses>
+			<response value = '1'>Fever</response>
+			<response value = '2'>Headache</response>
+			<response value = '12'>Yellow eyes or skin</response>
 		</responses>
 	</question>
 
@@ -366,19 +587,71 @@ Do you want to proceed with enrollment anyway?</text>
 		<text>Specify other:</text>
 		<maxCharacters>80</maxCharacters>
 		<preskip>
-			<skip fieldname='vx_card_no' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='vx_any'></skip>
+			<skip fieldname='vx_card_no' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='vx_card_ver_plan'></skip>
 		</preskip>
 	</question>
 
 
+	<question type = 'radio' fieldname = 'vx_card_ver_plan' fieldtype = 'integer'>
+		<text>To complete our questions about the doses of the malaria vaccine that [[participantsname]] received, we need to view their vaccine card. If you do not have the card today, we will collect the data to the best of your recollection. We will plan to visit your home or have you return with the card.</text>
+		<responses>
+			<response value = '1'>Will schedule home visit to verify vaccination history</response>
+			<response value = '2'>Caregiver will return to facility with participant’s vaccine card</response>
+		</responses>
+	</question>
+
+
+	<question type = 'automatic' fieldname = 'need_vac_cov' fieldtype = 'integer'>
+		<calculation type='case'>
+			<when field='vx_card_ver_plan' operator='=' value='1'>
+				<result type='constant' value='1' />
+			</when>
+			<when field='vx_card_ver_plan' operator='=' value='2'>
+				<result type='constant' value='1' />
+			</when>
+			<else>
+				<result type='constant' value='0' />
+			</else>
+		</calculation>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'vx_any' fieldtype = 'integer'>
-		<text>Has [[participantsname]] received any doses of the malaria vaccine?</text>
+		<text>Has [[participantsname]] received any doses of the R21 malaria vaccine?</text>
 		<responses>
 			<response value = '1'>Yes</response>
 			<response value = '0'>No</response>
 		</responses>
 		<preskip>
-			<skip fieldname='age' condition = '&gt;' response='4' response_type='fixed' skiptofieldname ='hib_any'></skip>
+			<skip fieldname='vx_card_ver_plan' condition = '=' response='1' response_type='fixed' skiptofieldname ='comments'></skip>
+			<skip fieldname='vx_card_ver_plan' condition = '=' response='2' response_type='fixed' skiptofieldname ='comments'></skip>
+			<skip fieldname='age' condition = '&gt;' response='4' response_type='fixed' skiptofieldname ='comments'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'vx_doses_received_rtss' fieldtype = 'integer'>
+		<text>As of today's date, how many doses of RTS,S, malaria vaccine has this child received? (Only record if vaccine card verified.)</text>
+		<responses>
+			<response value = '0'>0</response>
+			<response value = '1'>1</response>
+			<response value = '2'>2</response>
+			<response value = '3'>3</response>
+			<response value = '4'>4</response>
+		</responses>
+		<preskip>
+			<skip fieldname='vx_any' condition = '=' response='0' response_type='fixed' skiptofieldname ='vx_any_no'></skip>
+		</preskip>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'information' fieldname = 'vx_doses_received_note_rtss' fieldtype = 'n/a'>
+		<text>Thank you for your time today. [[participantsname]] is no longer eligible for this study because they have received a dose of RTS,S a different malaria vaccine.
+
+(End of survey)</text>
+		<preskip>
+			<skip fieldname='vx_doses_received_rtss' condition = '=' response='0' response_type='fixed' skiptofieldname ='vx_doses_received'></skip>
 		</preskip>
 	</question>
 
@@ -390,12 +663,13 @@ Do you want to proceed with enrollment anyway?</text>
 			<response value = '2'>Vaccine not available</response>
 			<response value = '3'>Could not travel to clinic</response>
 			<response value = '4'>Refused/Did not want</response>
-			<response value = '5'>Did not know</response>
+			<response value = '5'>Did not know about the vaccine</response>
 			<response value = '6'>Health worker shared wrong information on dose or schedule</response>
 			<response value = '7'>Child was sick and/or admitted</response>
 			<response value = '96'>Other</response>
 		</responses>
 		<preskip>
+			<skip fieldname='vx_doses_received_rtss' condition = '&gt;' response='0' response_type='fixed' skiptofieldname ='comments'></skip>
 			<skip fieldname='vx_any' condition = '=' response='1' response_type='fixed' skiptofieldname ='vx_doses_received'></skip>
 		</preskip>
 	</question>
@@ -405,19 +679,19 @@ Do you want to proceed with enrollment anyway?</text>
 		<text>Specify other:</text>
 		<maxCharacters>80</maxCharacters>
 		<preskip>
-			<skip fieldname='vx_any_no' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_any'></skip>
+			<skip fieldname='vx_any_no' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='comments'></skip>
 		</preskip>
 	</question>
 
 
-	<question type = 'text' fieldname = 'vx_doses_received' fieldtype = 'text_integer'>
+	<question type = 'text' fieldname = 'vx_doses_received' fieldtype = 'integer'>
 		<text>As of today's date, how many doses of malaria vaccine has [[participantsname]] received?</text>
 		<maxCharacters>1</maxCharacters>
 		<numeric_check>
 			<values minvalue ='1' maxvalue='4' other_values = '1' message = 'Number must be between 1 and 4!'></values>
 		</numeric_check>
 		<preskip>
-			<skip fieldname='vx_any' condition = '=' response='0' response_type='fixed' skiptofieldname ='hib_any'></skip>
+			<skip fieldname='vx_any' condition = '=' response='0' response_type='fixed' skiptofieldname ='comments'></skip>
 		</preskip>
 	</question>
 
@@ -789,7 +1063,7 @@ Dose 4: [[vx_dose4_date]]</text>
 			<response value = '0'>No</response>
 		</responses>
 		<postskip>
-			<skip fieldname='vx_dose_off_sched' condition = '=' response='0' response_type='fixed' skiptofieldname ='hib_any'></skip>
+			<skip fieldname='vx_dose_off_sched' condition = '=' response='0' response_type='fixed' skiptofieldname ='wall_material'></skip>
 		</postskip>
 	</question>
 
@@ -806,7 +1080,7 @@ Dose 4: [[vx_dose4_date]]</text>
 			<response value = '96'>Other</response>
 		</responses>
 		<postskip>
-			<skip fieldname='vx_doses_offsched_reas' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_any'></skip>
+			<skip fieldname='vx_doses_offsched_reas' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='wall_material'></skip>
 		</postskip>
 	</question>
 
@@ -817,276 +1091,88 @@ Dose 4: [[vx_dose4_date]]</text>
 	</question>
 
 
-	<question type = 'radio' fieldname = 'hib_any' fieldtype = 'integer'>
-		<text>Has [[participantsname]] received any doses of the HiB vaccine?</text>
+	<question type = 'radio' fieldname = 'wall_material' fieldtype = 'integer'>
+		<text>What is the main material of the exterior walls of the building where [[participantsname]] sleeps?</text>
+		<responses>
+			<response value = '0'>No walls</response>
+			<response value = '1'>Cane / palm / trunks</response>
+			<response value = '2'>Dirt</response>
+			<response value = '3'>Bamboo with mud</response>
+			<response value = '4'>Stone with mud</response>
+			<response value = '5'>Uncovered adobe plywood</response>
+			<response value = '6'>Cardboard</response>
+			<response value = '7'>Reused wood</response>
+			<response value = '8'>Cementstone with</response>
+			<response value = '9'>lime/cement</response>
+			<response value = '10'>Bricks</response>
+			<response value = '11'>Cement block</response>
+			<response value = '12'>Covered adobe</response>
+			<response value = '13'>Wood planks / shingles</response>
+			<response value = '96'>Other (specify)</response>
+		</responses>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'text' fieldname = 'wall_material_oth' fieldtype = 'text'>
+		<text>Specify other:</text>
+		<maxCharacters>80</maxCharacters>
+		<preskip>
+			<skip fieldname='wall_material' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='roof_material'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'roof_material' fieldtype = 'integer'>
+		<text>What is the main material of the roof of the building where [[participantsname]] sleeps?</text>
+		<responses>
+			<response value = '0'>No roof</response>
+			<response value = '1'>Thatch / palm</response>
+			<response value = '2'>Leaf</response>
+			<response value = '3'>Sod</response>
+			<response value = '4'>Rustic mats</response>
+			<response value = '5'>Palm / bamboo</response>
+			<response value = '6'>Wood planks cardboard</response>
+			<response value = '7'>Zinc, metal wood</response>
+			<response value = '8'>Calamine / cement fiber</response>
+			<response value = '9'>Ceramic tiles</response>
+			<response value = '10'>Concrete, cement</response>
+			<response value = '11'>Asbestos sheets, shingles</response>
+			<response value = '96'>Other (specify)</response>
+		</responses>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'text' fieldname = 'roof_material_oth' fieldtype = 'text'>
+		<text>Specify other:</text>
+		<maxCharacters>80</maxCharacters>
+		<preskip>
+			<skip fieldname='roof_material' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='spray'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'spray' fieldtype = 'integer'>
+		<text>At any time in the past 12 months, have the interior walls of [[participantsname]] household been sprayed against mosquitoes?</text>
 		<responses>
 			<response value = '1'>Yes</response>
 			<response value = '0'>No</response>
 		</responses>
-		<postskip>
-			<skip fieldname='hib_any' condition = '=' response='0' response_type='fixed' skiptofieldname ='timetobed'></skip>
-		</postskip>
+		<dont_know>-7</dont_know>
 	</question>
 
 
-	<question type = 'text' fieldname = 'hib_doses_received' fieldtype = 'text_integer'>
-		<text>As of today's date, how many doses of Haemophilus influenzae type b (Hib) vaccine has [[participantsname]] received?</text>
-		<maxCharacters>1</maxCharacters>
-		<numeric_check>
-			<values minvalue ='1' maxvalue='3' other_values = '1' message = 'Number must be between 1 and 3!'></values>
-		</numeric_check>
-	</question>
-
-
-	<question type = 'radio' fieldname = 'hib_doses_received_ver' fieldtype = 'integer'>
-		<text>Method of verification of number of doses (Select one):</text>
-		<logic_check>
-			vx_card = 0 and hib_doses_received_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
-		</logic_check>
+	<question type = 'radio' fieldname = 'spray_wash' fieldtype = 'integer'>
+		<text>Since your dwelling was sprayed, have you repainted, re-plastered, or washed the walls in any way?</text>
 		<responses>
-			<response value = '1'>Guardian report</response>
-			<response value = '2'>Vaccine card</response>
-			<response value = '96'>Other</response>
-		</responses>
-		<postskip>
-			<skip fieldname='hib_doses_received_ver' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_dose1_where'></skip>
-		</postskip>
-	</question>
-
-
-	<question type = 'text' fieldname = 'hib_doses_received_ver_oth' fieldtype = 'text'>
-		<text>Specify other:</text>
-		<maxCharacters>80</maxCharacters>
-	</question>
-
-
-	<question type = 'radio' fieldname = 'hib_dose1_where' fieldtype = 'integer'>
-		<text>Where was HiB dose 1 received?</text>
-		<responses>
-			<response value = '1'>Health post or health center</response>
-			<response value = '2'>Community/Village location</response>
-			<response value = '96'>Other</response>
-		</responses>
-		<postskip>
-			<skip fieldname='hib_dose1_where' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_dose1_date'></skip>
-		</postskip>
-	</question>
-
-
-	<question type = 'text' fieldname = 'hib_dose1_where_oth' fieldtype = 'text'>
-		<text>Specify other:</text>
-		<maxCharacters>80</maxCharacters>
-	</question>
-
-
-	<question type = 'date' fieldname = 'hib_dose1_date' fieldtype = 'date'>
-		<text>On what date was dose 1 of Hib received?</text>
-		<date_range>
-			<min_date>-3y</min_date>
-			<max_date>0</max_date>
-		</date_range>
-		<logic_check>
-			hib_dose1_date &lt; dob; 'Date of vaccination cannot be before date of birth!'
-		</logic_check>
-	</question>
-
-
-	<question type = 'radio' fieldname = 'hib_dose1_date_ver' fieldtype = 'integer'>
-		<text>Method of verification of dose 1 date</text>
-		<logic_check>
-			vx_card = 0 and hib_dose1_date_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
-		</logic_check>
-		<responses>
-			<response value = '1'>Guardian report</response>
-			<response value = '2'>Vaccine card</response>
-			<response value = '96'>Other</response>
-		</responses>
-		<postskip>
-			<skip fieldname='hib_dose1_date_ver' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_dose2_where'></skip>
-		</postskip>
-	</question>
-
-
-	<question type = 'text' fieldname = 'hib_dose1_date_ver_oth' fieldtype = 'text'>
-		<text>Specify other:</text>
-		<maxCharacters>80</maxCharacters>
-		<postskip>
-			<skip fieldname='hib_doses_received' condition = '=' response='1' response_type='fixed' skiptofieldname ='hib_dose_summary'></skip>
-		</postskip>
-	</question>
-
-
-	<question type = 'radio' fieldname = 'hib_dose2_where' fieldtype = 'integer'>
-		<text>Where was HiB dose 2 received?</text>
-		<responses>
-			<response value = '1'>Health post or health center</response>
-			<response value = '2'>Community/Village location</response>
-			<response value = '96'>Other</response>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
 		</responses>
 		<preskip>
-			<skip fieldname='hib_doses_received' condition = '&lt;' response='2' response_type='fixed' skiptofieldname ='hib_dose_summary'></skip>
+			<skip fieldname='spray' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='timetobed'></skip>
 		</preskip>
-		<postskip>
-			<skip fieldname='hib_dose2_where' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_dose2_date'></skip>
-		</postskip>
-	</question>
-
-
-	<question type = 'text' fieldname = 'hib_dose2_where_oth' fieldtype = 'text'>
-		<text>Specify other:</text>
-		<maxCharacters>80</maxCharacters>
-	</question>
-
-
-	<question type = 'date' fieldname = 'hib_dose2_date' fieldtype = 'date'>
-		<text>On what date was dose 2 of Hib received?</text>
-		<date_range>
-			<min_date>-3y</min_date>
-			<max_date>0</max_date>
-		</date_range>
-		<logic_check>
-			hib_dose2_date &lt;= hib_dose1_date; 'Date of dose 2 cannot be on or before date of dose 1'
-		</logic_check>
-		<logic_check>
-			hib_dose2_date &lt; dob; 'Date of vaccination cannot be before date of birth!'
-		</logic_check>
-	</question>
-
-
-	<question type = 'automatic' fieldname = 'hibdose2_warning_time' fieldtype = 'integer'>
-		<calculation type='date_diff' field='hib_dose1_date' value='hib_dose2_date' unit='w' />
-	</question>
-
-
-	<question type = 'radio' fieldname = 'hib_dose2_datecheck' fieldtype = 'integer'>
-		<text>WARNING!
-
-Dose 2 is less than 3 weeks after dose 1. Is this correct?
-Otherwise go back and correct the dose dates</text>
-		<responses>
-			<response value = '1'>Yes - proceed</response>
-		</responses>
-		<preskip>
-			<skip fieldname='hibdose2_warning_time' condition = '&gt;=' response='3' response_type='fixed' skiptofieldname ='hib_dose2_date_ver'></skip>
-		</preskip>
-	</question>
-
-
-	<question type = 'radio' fieldname = 'hib_dose2_date_ver' fieldtype = 'integer'>
-		<text>Method of verification of dose 2 date</text>
-		<logic_check>
-			vx_card = 0 and hib_dose2_date_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
-		</logic_check>
-		<responses>
-			<response value = '1'>Guardian report</response>
-			<response value = '2'>Vaccine card</response>
-			<response value = '96'>Other</response>
-		</responses>
-		<postskip>
-			<skip fieldname='hib_dose2_date_ver' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_dose3_where'></skip>
-		</postskip>
-	</question>
-
-
-	<question type = 'text' fieldname = 'hib_dose2_date_ver_oth' fieldtype = 'text'>
-		<text>Specify other:</text>
-		<maxCharacters>80</maxCharacters>
-		<postskip>
-			<skip fieldname='hib_doses_received' condition = '=' response='2' response_type='fixed' skiptofieldname ='timetobed'></skip>
-		</postskip>
-	</question>
-
-
-	<question type = 'radio' fieldname = 'hib_dose3_where' fieldtype = 'integer'>
-		<text>Where was HiB dose 3 received?</text>
-		<responses>
-			<response value = '1'>Health post or health center</response>
-			<response value = '2'>Community/Village location</response>
-			<response value = '96'>Other</response>
-		</responses>
-		<preskip>
-			<skip fieldname='hib_doses_received' condition = '&lt;' response='3' response_type='fixed' skiptofieldname ='hib_dose_summary'></skip>
-		</preskip>
-		<postskip>
-			<skip fieldname='hib_dose3_where' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_dose3_date'></skip>
-		</postskip>
-	</question>
-
-
-	<question type = 'text' fieldname = 'hib_dose3_where_oth' fieldtype = 'text'>
-		<text>Specify other:</text>
-		<maxCharacters>80</maxCharacters>
-	</question>
-
-
-	<question type = 'date' fieldname = 'hib_dose3_date' fieldtype = 'date'>
-		<text>On what date was dose 3 of Hib received?</text>
-		<date_range>
-			<min_date>-3y</min_date>
-			<max_date>0</max_date>
-		</date_range>
-		<logic_check>
-			hib_dose3_date &lt;= hib_dose2_date; 'Date of dose 3 cannot be on or before date of dose 2'
-		</logic_check>
-		<logic_check>
-			hib_dose3_date &lt; dob; 'Date of vaccination cannot be before date of birth!'
-		</logic_check>
-	</question>
-
-
-	<question type = 'automatic' fieldname = 'hibdose3_warning_time' fieldtype = 'integer'>
-		<calculation type='date_diff' field='hib_dose2_date' value='hib_dose3_date' unit='w' />
-	</question>
-
-
-	<question type = 'radio' fieldname = 'hib_dose3_datecheck' fieldtype = 'integer'>
-		<text>WARNING!
-
-Dose 3 is less than 3 weeks after dose 2. Is this correct?
-Otherwise go back and correct the dose dates</text>
-		<responses>
-			<response value = '1'>Yes - proceed</response>
-		</responses>
-		<preskip>
-			<skip fieldname='hibdose3_warning_time' condition = '&gt;=' response='3' response_type='fixed' skiptofieldname ='hib_dose3_date_ver'></skip>
-		</preskip>
-	</question>
-
-
-	<question type = 'radio' fieldname = 'hib_dose3_date_ver' fieldtype = 'integer'>
-		<text>Method of verification of dose 3 date</text>
-		<logic_check>
-			vx_card = 0 and hib_dose3_date_ver = 2; 'You previously indicated that the guardian does not have a vaccine card!'
-		</logic_check>
-		<responses>
-			<response value = '1'>Guardian report</response>
-			<response value = '2'>Vaccine card</response>
-			<response value = '96'>Other</response>
-		</responses>
-		<postskip>
-			<skip fieldname='hib_dose3_date_ver' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hib_dose_summary'></skip>
-		</postskip>
-	</question>
-
-
-	<question type = 'text' fieldname = 'hib_dos32_date_ver_oth' fieldtype = 'text'>
-		<text>Specify other:</text>
-		<maxCharacters>80</maxCharacters>
-	</question>
-
-
-	<question type = 'radio' fieldname = 'hib_dose_summary' fieldtype = 'integer'>
-		<text>Review and confirm the dates you have entered for the HiB vaccine doses.
-
-If any date is incorrect, please go back and correct it.
-
-        (Year–Month–Day)
-Dose 1: [[hib_dose1_date]]
-Dose 2: [[hib_dose2_date]]
-Dose 3: [[hib_dose3_date]]</text>
-		<responses>
-			<response value = '1'>Yes, dates are correct</response>
-		</responses>
+		<dont_know>-7</dont_know>
 	</question>
 
 
@@ -1103,18 +1189,8 @@ Dose 3: [[hib_dose3_date]]</text>
 	</question>
 
 
-	<question type = 'radio' fieldname = 'spray' fieldtype = 'integer'>
-		<text>At any time in the past 12 months, have the interior walls of [[participantsname]] household been sprayed against mosquitoes?</text>
-		<responses>
-			<response value = '1'>Yes</response>
-			<response value = '0'>No</response>
-			<response value = '88'>Do not know</response>
-		</responses>
-	</question>
-
-
 	<question type = 'radio' fieldname = 'bednetlastnight' fieldtype = 'integer'>
-		<text>Did [[participantsname]] sleep under a bednet last night?</text>
+		<text>Did [[participantsname]] sleep under a bednet last night? best estimate ok)</text>
 		<responses>
 			<response value = '1'>Yes</response>
 			<response value = '0'>No</response>
@@ -1136,6 +1212,48 @@ Dose 3: [[hib_dose3_date]]</text>
 	</question>
 
 
+	<question type = 'radio' fieldname = 'bednet_age' fieldtype = 'integer'>
+		<text>How long have you had this net?</text>
+		<responses>
+			<response value = '1'>Months</response>
+			<response value = '2'>Years</response>
+		</responses>
+		<preskip>
+			<skip fieldname='bednettwoweeks' condition = '=' response='0' response_type='fixed' skiptofieldname ='child_num_sleep'></skip>
+		</preskip>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'bednet_type' fieldtype = 'integer'>
+		<text>What type of net is it?</text>
+		<responses>
+			<response value = '1'>Long lasting insecticide-treated net (LLIN)</response>
+			<response value = '2'>Permanent net</response>
+			<response value = '96'>Other</response>
+		</responses>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'text' fieldname = 'bednet_type_oth' fieldtype = 'text'>
+		<text>Specify other:</text>
+		<maxCharacters>80</maxCharacters>
+		<preskip>
+			<skip fieldname='bednet_type' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='child_num_sleep'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'text' fieldname = 'child_num_sleep' fieldtype = 'integer'>
+		<text>How many children share the same sleeping place?</text>
+		<maxCharacters>2</maxCharacters>
+		<numeric_check>
+			<values minvalue ='1' maxvalue='20' other_values = '1' message = 'Number must be between 1 and 20!'></values>
+		</numeric_check>
+	</question>
+
+
 	<question type = 'radio' fieldname = 'prevdiag' fieldtype = 'integer'>
 		<text>Excluding this visit, has [[participantsname]] previously been diagnosed for malaria at a health facility or by a health worker?</text>
 		<responses>
@@ -1153,7 +1271,7 @@ Dose 3: [[hib_dose3_date]]</text>
 			<response value = '3'>More than 6 months ago</response>
 		</responses>
 		<preskip>
-			<skip fieldname='prevdiag' condition = '=' response='0' response_type='fixed' skiptofieldname ='consent'></skip>
+			<skip fieldname='prevdiag' condition = '=' response='0' response_type='fixed' skiptofieldname ='smc_note'></skip>
 		</preskip>
 	</question>
 
@@ -1178,6 +1296,7 @@ Dose 3: [[hib_dose3_date]]</text>
 			<response value = '0'>No</response>
 			<response value = '88'>Do not know</response>
 		</responses>
+		<dont_know>-7</dont_know>
 	</question>
 
 
@@ -1188,6 +1307,7 @@ Dose 3: [[hib_dose3_date]]</text>
 			<response value = '0'>No</response>
 			<response value = '88'>Do not know</response>
 		</responses>
+		<dont_know>-7</dont_know>
 	</question>
 
 
@@ -1195,25 +1315,20 @@ Dose 3: [[hib_dose3_date]]</text>
 		<text>Which 'other' medication was used?</text>
 		<maxCharacters>80</maxCharacters>
 		<preskip>
-			<skip fieldname='prevdiag_othermeds' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='consent'></skip>
+			<skip fieldname='prevdiag_othermeds' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='smc_note'></skip>
 		</preskip>
 	</question>
 
 
-	<question type = 'radio' fieldname = 'consent' fieldtype = 'integer'>
-		<text>Does [[participantsname]]'s guardian consent to laboratory testing?</text>
-		<responses>
-			<response value = '1'>Yes</response>
-			<response value = '0'>No</response>
-		</responses>
-		<postskip>
-			<skip fieldname='consent' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='comments'></skip>
-		</postskip>
+	<question type = 'information' fieldname = 'smc_note' fieldtype = 'n/a'>
+		<text>The next set of questions are about medicine to prevent malaria.</text>
 	</question>
 
 
-	<question type = 'radio' fieldname = 'consent2' fieldtype = 'integer'>
-		<text>Does [[participantsname]]'s guardian consent to future use of biological specimens?</text>
+	<question type = 'radio' fieldname = 'smc_knw' fieldtype = 'integer'>
+		<text>Have you heard of a medicine given to healthy children under 5 years old to prevent malaria during the rainy season? 
+
+(EMPHASIZE "PREVENTING" NOT TREATING MALARIA)</text>
 		<responses>
 			<response value = '1'>Yes</response>
 			<response value = '0'>No</response>
@@ -1221,73 +1336,463 @@ Dose 3: [[hib_dose3_date]]</text>
 	</question>
 
 
-	<question type = 'text' fieldname = 'uid' fieldtype = 'text'>
-		<text>Enter the UID from the REGISTER barcode  (5 digits)</text>
-		<maxCharacters>=5</maxCharacters>
-		<unique_check>
-			<message>This UID as already been used!</message>
-		</unique_check>
-	</question>
-
-
-	<question type = 'text' fieldname = 'uid2' fieldtype = 'text'>
-		<text>Please re-enter the UID from the REGISTER barcode (5 digits)</text>
-		<maxCharacters>=5</maxCharacters>
-		<logic_check>
-			uid2 &lt;&gt; uid; 'This does not match your previous entry of the UID!'
-		</logic_check>
-	</question>
-
-
-	<question type = 'text' fieldname = 'fpbarcode1_r21' fieldtype = 'text'>
-		<text>Enter R21 STUDY barcode</text>
-		<maxCharacters>=12</maxCharacters>
-		<mask value="R21-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
-		<unique_check>
-			<message>This barcode has already been used!</message>
-		</unique_check>
-	</question>
-
-
-	<question type = 'text' fieldname = 'fpbarcode2_r21' fieldtype = 'text'>
-		<text>Re-enter R21 STUDY barcode</text>
-		<maxCharacters>=12</maxCharacters>
-		<mask value="R21-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
-		<logic_check>
-			fpbarcode2_r21 &lt;&gt; fpbarcode1_r21; 'This does not match your previous entry of the barcode!'
-		</logic_check>
-	</question>
-
-
-	<question type = 'radio' fieldname = 'enroll_immrse' fieldtype = 'integer'>
-		<text>Is [[participantsname]] also enrolled in the IMMRSE study?</text>
+	<question type = 'radio' fieldname = 'smc_dis_com' fieldtype = 'integer'>
+		<text>During this rainy season, has this medicine been distributed to households in your community?</text>
 		<responses>
 			<response value = '1'>Yes</response>
 			<response value = '0'>No</response>
 		</responses>
-	</question>
-
-
-	<question type = 'text' fieldname = 'fpbarcode1_immrse' fieldtype = 'text'>
-		<text>Enter IMMRSE barcode</text>
-		<maxCharacters>=14</maxCharacters>
-		<mask value="IM-[0-9][0-9]-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
-		<unique_check>
-			<message>This barcode has already been used!</message>
-		</unique_check>
 		<preskip>
-			<skip fieldname='enroll_immrse' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='comments'></skip>
+			<skip fieldname='smc_knw' condition = '=' response='0' response_type='fixed' skiptofieldname ='malnourish'></skip>
+		</preskip>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'smc_dis_hh' fieldtype = 'integer'>
+		<text>Have community health workers come to your household during this rainy season to distribute medicine that prevents malaria?</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+		<preskip>
+			<skip fieldname='smc_dis_com' condition = '=' response='0' response_type='fixed' skiptofieldname ='malnourish'></skip>
+		</preskip>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'smc_month' fieldtype = 'integer'>
+		<text>When did a distributor last visit your household this rainy season to distribute the medicine that prevents malaria in children under 5 years old? 
+
+(EMPHASIZE LAST VISIT – ONLY ONE RESPONSE ALLOWED)</text>
+		<responses>
+			<response value = '1'>June</response>
+			<response value = '2'>July</response>
+			<response value = '3'>August</response>
+			<response value = '4'>September</response>
+			<response value = '5'>October</response>
+		</responses>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'smc_dose1' fieldtype = 'integer'>
+		<text>I want to ask you a few questions about the last time…
+
+Did the child take the first dose…</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'smc_add_days' fieldtype = 'integer'>
+		<text>After the first dose, for how many additional days did [[participantsname]] take the other doses of the medicine that the distributor left with the caregiver? 
+
+*ADAPT TO COUNTRY SMC IMPLEMENTATION POLICY IF ALL DOSES ARE GIVEN BY DOT OR NOT.</text>
+		<responses>
+			<response value = '0'>Didn’t take any medicine after their visit</response>
+			<response value = '1'>1 day after</response>
+			<response value = '2'>2 days after</response>
+			<response value = '3'>3 days after</response>
+		</responses>
+		<preskip>
+			<skip fieldname='smc_dose1' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='smc_reason_nodose'></skip>
+		</preskip>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'smc_dose2' fieldtype = 'integer'>
+		<text>Did the child take the second dose of medicine?</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'smc_dose3' fieldtype = 'integer'>
+		<text>Did the child take the third dose of medicine?</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'checkbox' fieldname = 'smc_reason_nodose' fieldtype = 'text'>
+		<text>What is the reason(s) the child did not take a dose of the medicine from the distributors? 
+
+MULTIPLE RESPONSES POSSIBLE 
+MARK ALL RESPONSES THE RESPONDENT SAYS 
+
+PROBE ONCE: Anything else?</text>
+		<responses>
+			<response value = '1'>Child was not present when the distributors came</response>
+			<response value = '2'>Forgot to give the medicine to the child</response>
+			<response value = '3'>Lost the medicine the distributor left</response>
+			<response value = '4'>Sent children away so they would not receive the medicine</response>
+			<response value = '5'>No water to take medicine</response>
+			<response value = '6'>No food to take medicine</response>
+			<response value = '7'>Child vomitted tablets after swallowing them</response>
+			<response value = '8'>Difficulty crushing the tablets</response>
+			<response value = '9'>Child fell sick after taking a previous dose of this medicine</response>
+			<response value = '10'>Heard of or saw bad secondary effects in other children</response>
+			<response value = '11'>Medicine does not prevent malaria</response>
+			<response value = '12'>Child was not sick</response>
+			<response value = '13'>Did not know enough about the medicine</response>
+			<response value = '14'>Don’t trust people who distributed the medicine</response>
+			<response value = '15'>Preferred to save the medicine for future illness</response>
+			<response value = '16'>Chose to give the medicine to other children at home</response>
+			<response value = '96'>Other (specify)</response>
+		</responses>
+		<preskip>
+			<skip fieldname='smc_dose1' condition = '=' response='0' response_type='fixed' skiptofieldname ='malnourish'></skip>
+		</preskip>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'text' fieldname = 'smc_reason_nodose_oth' fieldtype = 'text'>
+		<text>Specify other reason the  child did not take a dose of the medicine from the distributors.</text>
+		<maxCharacters>80</maxCharacters>
+		<preskip>
+			<skip fieldname='smc_reason_nodose' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='malnourish'></skip>
 		</preskip>
 	</question>
 
 
-	<question type = 'text' fieldname = 'fpbarcode2_immrse' fieldtype = 'text'>
-		<text>Re-enter IMMRSE barcode</text>
-		<maxCharacters>=14</maxCharacters>
-		<mask value="IM-[0-9][0-9]-[0-9][0-9][0-9]-[A-Z0-9][0-9A-Z][A-Z0-9][A-Z0-9]" />
-		<logic_check>
-			fpbarcode2_immrse &lt;&gt; fpbarcode1_immrse; 'This does not match your previous entry of the barcode!'
-		</logic_check>
+	<question type = 'information' fieldname = 'note_nutri' fieldtype = 'n/a'>
+		<text>The following questions ask about your child's nutritional health…</text>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'malnourish' fieldtype = 'integer'>
+		<text>The following questions ask about your child's nutritional health…
+
+Has a health worker ever told you that [[participantsname]] is malnourished?</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'malnourish_when' fieldtype = 'integer'>
+		<text>If yes, when was this?</text>
+		<responses>
+			<response value = '1'>Within the past 3 months</response>
+			<response value = '2'>3 - 12 months ago</response>
+			<response value = '3'>More than 12 months ago</response>
+		</responses>
+		<preskip>
+			<skip fieldname='malnourish' condition = '=' response='0' response_type='fixed' skiptofieldname ='height'></skip>
+		</preskip>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'malnourish_trt' fieldtype = 'integer'>
+		<text>Is [[participantsname]] currently receiving treatment for malnutrition…</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'text' fieldname = 'height' fieldtype = 'integer'>
+		<text>What is the child’s height (in cm)?</text>
+		<maxCharacters>3</maxCharacters>
+	</question>
+
+
+	<question type = 'text' fieldname = 'weight' fieldtype = 'integer'>
+		<text>What is the child’s weight (in kg)?</text>
+		<maxCharacters>2</maxCharacters>
+	</question>
+
+
+	<question type = 'text' fieldname = 'muac' fieldtype = 'integer'>
+		<text>What is the child’s middle upper arm circumference (cm)?</text>
+		<maxCharacters>2</maxCharacters>
+	</question>
+
+
+	<question type = 'text' fieldname = 'caregiver_age' fieldtype = 'integer'>
+		<text>Mother’s or main caregiver’s age (years)</text>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'momeduclevel' fieldtype = 'integer'>
+		<text>What is education level of the mother or main caregiver of [[participantsname]]?</text>
+		<responses>
+			<response value = '0'>No education/Never gone to school</response>
+			<response value = '1'>Nursery</response>
+			<response value = '2'>Primary</response>
+			<response value = '3'>Secondary</response>
+			<response value = '4'>Vocational</response>
+			<response value = '5'>University and Above</response>
+		</responses>
+	</question>
+
+
+	<question type = 'text' fieldname = 'hh_size' fieldtype = 'integer'>
+		<text>How many people live in this hpusehold?
+
+Total number of people (all ages)…</text>
+		<maxCharacters>2</maxCharacters>
+		<numeric_check>
+			<values minvalue ='1' maxvalue='99' other_values = '1' message = 'Number must be between 1 and 99!'></values>
+		</numeric_check>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'livestock' fieldtype = 'integer'>
+		<text>Does anyone in the household own any of the following?
+Cattle
+Sheep
+Horses
+Donkeys
+Pigs
+Poultry</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+		<refuse>-8</refuse>
+	</question>
+
+
+	<question type = 'text' fieldname = 'cattle' fieldtype = 'integer'>
+		<text>Number of Cattle (If none, enter 0)</text>
+		<preskip>
+			<skip fieldname='livestock' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='radio'></skip>
+		</preskip>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'text' fieldname = 'sheep' fieldtype = 'integer'>
+		<text>Number of Sheep (If none, enter 0)</text>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'text' fieldname = 'horses' fieldtype = 'integer'>
+		<text>Number of Horses (If none, enter 0)</text>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'text' fieldname = 'donkeys' fieldtype = 'integer'>
+		<text>Number of Donkeys (If none, enter 0)</text>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'text' fieldname = 'pigs' fieldtype = 'integer'>
+		<text>Number of Pigs (If none, enter 0)</text>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'text' fieldname = 'poultry' fieldtype = 'integer'>
+		<text>Number of Poultry (If none, enter 0)</text>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'radio' fieldtype = 'integer'>
+		<text>Does anyone in your household own...
+
+Radio/cassette/CD</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'bed' fieldtype = 'integer'>
+		<text>Iron bed or carved wood bed</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'bicycle' fieldtype = 'integer'>
+		<text>Bicycle</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'cart' fieldtype = 'integer'>
+		<text>Horse or donkey cart</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'video' fieldtype = 'integer'>
+		<text>Video</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'tv' fieldtype = 'integer'>
+		<text>TV</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'motorbike' fieldtype = 'integer'>
+		<text>Motorbike</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'watch' fieldtype = 'integer'>
+		<text>Watch</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'phone' fieldtype = 'integer'>
+		<text>Mobile phone</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'car' fieldtype = 'integer'>
+		<text>Car</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+	</question>
+
+
+	<question type = 'checkbox' fieldname = 'hhh_occupation' fieldtype = 'text'>
+		<text>Main occupation of head of household (select all that apply)</text>
+		<responses>
+			<response value = '1'>Farmer</response>
+			<response value = '2'>Herdsman</response>
+			<response value = '3'>Fisherman</response>
+			<response value = '4'>Shopkeeper / retailer</response>
+			<response value = '5'>Businessman (specify)</response>
+			<response value = '6'>Nurse</response>
+			<response value = '7'>Childcare</response>
+			<response value = '8'>Domestic help</response>
+			<response value = '9'>Student</response>
+			<response value = '10'>No occupation</response>
+			<response value = '11'>Civil servant</response>
+			<response value = '96'>Other (Specify)</response>
+		</responses>
+	</question>
+
+
+	<question type = 'text' fieldname = 'hh_occupation_oth' fieldtype = 'text'>
+		<text>Other specify:</text>
+		<maxCharacters>80</maxCharacters>
+		<preskip>
+			<skip fieldname='hhh_occupation' condition = '&lt;&gt;' response='96' response_type='fixed' skiptofieldname ='hhheadeduclevel'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'hhheadeduclevel' fieldtype = 'integer'>
+		<text>What is education level of the household head of the house the participant lives in?</text>
+		<responses>
+			<response value = '0'>No education/Never gone to school</response>
+			<response value = '1'>Nursery</response>
+			<response value = '2'>Primary</response>
+			<response value = '3'>Secondary</response>
+			<response value = '4'>Vocational</response>
+			<response value = '5'>University and Above</response>
+		</responses>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'money_recieve' fieldtype = 'integer'>
+		<text>Do you receive money from people outside the household?</text>
+		<responses>
+			<response value = '1'>Yes</response>
+			<response value = '0'>No</response>
+		</responses>
+		<dont_know>-7</dont_know>
+	</question>
+
+
+	<question type = 'checkbox' fieldname = 'money_recieve_who' fieldtype = 'text'>
+		<text>If Yes, who from? (select all that apply)</text>
+		<responses>
+			<response value = '1'>Mother</response>
+			<response value = '2'>Father</response>
+			<response value = '3'>Aunt</response>
+			<response value = '4'>Sister</response>
+			<response value = '5'>Brother</response>
+			<response value = '7'>Uncle</response>
+			<response value = '8'>Cousin</response>
+			<response value = '9'>Grandmother</response>
+			<response value = '10'>Grandfather</response>
+			<response value = '11'>Neighbor</response>
+			<response value = '12'>Family friend</response>
+			<response value = '13'>Other</response>
+		</responses>
+		<preskip>
+			<skip fieldname='money_recieve' condition = '&lt;&gt;' response='1' response_type='fixed' skiptofieldname ='ses'></skip>
+		</preskip>
+	</question>
+
+
+	<question type = 'text' fieldname = 'money_recieve_who_oth' fieldtype = 'text'>
+		<text>Other specify:</text>
+		<maxCharacters>80</maxCharacters>
+	</question>
+
+
+	<question type = 'radio' fieldname = 'ses' fieldtype = 'integer'>
+		<text>How would you rate your economic situation…</text>
+		<responses>
+			<response value = '1'>Among the most wealthy</response>
+			<response value = '2'>Above average wealth</response>
+			<response value = '3'>Average wealth</response>
+			<response value = '4'>Below average wealth</response>
+			<response value = '5'>Among the least wealthy</response>
+		</responses>
+		<dont_know>-7</dont_know>
+		<refuse>-8</refuse>
 	</question>
 
 

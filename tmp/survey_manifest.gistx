@@ -1,45 +1,37 @@
 {
-  "surveyName": "Clinical Trial 2026-02-05",
-  "surveyId": "clinical_trial_2026-02-05",
-  "databaseName": "clinical_trial.sqlite",
+  "surveyName": "R21 Test Negative 2026-06-15 Test",
+  "surveyId": "r21_test_negative_2026_06_15_test",
+  "databaseName": "r21_test_negative_2026_06_15_test.sqlite",
   "xmlFiles": [
-    "enrollment.xml",
-    "followup.xml",
-    "swf.xml"
+    "enrollee.xml",
+    "vaccine_coverage.xml"
   ],
   "crfs": [
     {
       "display_order": 10,
-      "tablename": "enrollment",
-      "displayname": "Enrollment Form",
+      "tablename": "enrollee",
+      "displayname": "Enrollee",
       "isbase": 1,
       "primarykey": "subjid",
+      "linkingfield": "fpbarcode1_r21",
       "idconfig": {
-        "prefix": "GX",
-        "fields": [{"name":"tabletnum","length":2}],
-        "incrementLength": 3
+        "prefix": "",
+        "fields": [{"name":"deviceid","length":3},{"name":"mrc","length":3}],
+        "incrementLength": 4
       },
-      "requireslink": 0
+      "display_fields": "startdate,participantsname"
     },
     {
       "display_order": 20,
-      "tablename": "followup",
-      "displayname": "Followup Survey",
+      "tablename": "vaccine_coverage",
+      "displayname": "Vaccine Coverage",
       "isbase": 0,
-      "primarykey": "subjid,vdate",
-      "linkingfield": "subjid",
-      "parenttable": "enrollment",
-      "requireslink": 1
-    },
-    {
-      "display_order": 30,
-      "tablename": "swf",
-      "displayname": "Subject Withdrawal Form",
-      "isbase": 0,
-      "primarykey": "subjid",
-      "linkingfield": "subjid",
-      "parenttable": "enrollment",
-      "requireslink": 1
+      "primarykey": "fpbarcode1_r21",
+      "linkingfield": "fpbarcode1_r21",
+      "parenttable": "enrollee",
+      "requireslink": 1,
+      "display_fields": "fpbarcode1_r21,participantsname",
+      "entry_condition": "need_vac_cov=1"
     }
   ]
 }

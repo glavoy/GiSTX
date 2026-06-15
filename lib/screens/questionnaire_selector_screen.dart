@@ -18,6 +18,7 @@ class QuestionnaireInfo {
   final bool isBase;
   final String? idConfig;
   final String? entryCondition;
+  final String? displayFields;
 
   QuestionnaireInfo({
     required this.filename,
@@ -29,6 +30,7 @@ class QuestionnaireInfo {
     this.isBase = false,
     this.idConfig,
     this.entryCondition,
+    this.displayFields,
   });
 }
 
@@ -136,6 +138,7 @@ class _QuestionnaireSelectorScreenState
             final isBase = (record['isbase'] as int?) == 1;
             final idConfig = record['idconfig']?.toString();
             final entryCondition = record['entry_condition']?.toString();
+            final displayFields = record['display_fields']?.toString();
 
             debugPrint(
                 '[QuestionnaireSelector] Adding questionnaire: $displayName ($filename)');
@@ -150,6 +153,7 @@ class _QuestionnaireSelectorScreenState
               isBase: isBase,
               idConfig: idConfig,
               entryCondition: entryCondition,
+              displayFields: displayFields,
             ));
           }
         }
@@ -209,6 +213,7 @@ class _QuestionnaireSelectorScreenState
               incrementField: questionnaire.incrementField,
               idConfig: questionnaire.idConfig,
               entryCondition: questionnaire.entryCondition,
+              displayFields: questionnaire.displayFields,
             ),
           ),
         );

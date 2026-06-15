@@ -135,3 +135,6 @@ linux/flutter/ephemeral/
 /installer_output/
 # Claude Code worktrees
 .claude/worktrees/
+
+/tmp
+tmp
