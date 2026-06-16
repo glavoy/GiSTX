@@ -1,6 +1,10 @@
-# GiSTX
+# GiSTX — main branch
 
-This bracnch is for the R21 Negative study
+This is the **general-purpose English-only** version of GiSTX. It connects to a single FTP server and displays all text in English.
+
+See the **burkinafaso** branch for the bilingual (English / French) dual-server version used for the R21 Negative study across Uganda and Burkina Faso.
+
+---
 
 ## Overview
 
@@ -31,5 +35,3 @@ GiSTX is a cross-platform offline survey and data collection application built w
 - **Database**: SQLite with automatic schema synchronization
 - **Platforms**: Windows, macOS, Linux, Android, iOS
 - **Survey Definition**: XML
-
-

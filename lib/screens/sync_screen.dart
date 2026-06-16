@@ -159,7 +159,8 @@ class _SyncScreenState extends State<SyncScreen> {
         // Extract surveyId from the downloaded zip to save credentials
         // The zip file name should be something like "surveyname.zip"
         // After extraction, we need to read the manifest to get the surveyId
-        await _associateCredentialsWithDownloadedSurvey(filename, username, password);
+        await _associateCredentialsWithDownloadedSurvey(
+            filename, username, password);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -198,14 +199,16 @@ class _SyncScreenState extends State<SyncScreen> {
       await _surveyConfig.initializeSurveys();
 
       // The survey name is the filename without .zip extension
-      final surveyName = filename.replaceAll(RegExp(r'\.zip$', caseSensitive: false), '');
+      final surveyName =
+          filename.replaceAll(RegExp(r'\.zip$', caseSensitive: false), '');
 
       // Get the surveyId for this survey
       final surveyId = await _surveyConfig.getSurveyId(surveyName);
 
       if (surveyId != null) {
         // Save the credentials that were used to download this survey
-        await _settingsService.setSurveyCredentials(surveyId, username, password);
+        await _settingsService.setSurveyCredentials(
+            surveyId, username, password);
         debugPrint('[SyncScreen] Saved credentials for survey: $surveyId');
       }
     } catch (e) {
@@ -232,7 +235,8 @@ class _SyncScreenState extends State<SyncScreen> {
         throw Exception('Could not find ID for survey: $surveyName');
 
       // 2. Get credentials for THIS survey (survey-specific or falls back to global)
-      final credentials = await _settingsService.getCredentialsForSurvey(surveyId);
+      final credentials =
+          await _settingsService.getCredentialsForSurvey(surveyId);
       if (credentials == null) {
         throw Exception('No credentials available for this survey.');
       }
@@ -297,9 +301,9 @@ class _SyncScreenState extends State<SyncScreen> {
       final connected = await _ftpService.connect(username, password);
       if (!connected) throw Exception('Connection failed.');
 
-      final success = await _ftpService.uploadFile(zipFile, zipFilename);
+      final uploadResult = await _ftpService.uploadFile(zipFile, zipFilename);
 
-      if (success) {
+      if (uploadResult.success) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -311,7 +315,7 @@ class _SyncScreenState extends State<SyncScreen> {
           _loadLastUploadTime();
         }
       } else {
-        throw Exception('Upload failed.');
+        throw uploadResult.failureMessage;
       }
 
       // Cleanup - We keep the file in outbox now
@@ -486,8 +490,8 @@ class _SyncScreenState extends State<SyncScreen> {
             const SizedBox(height: 8),
             Text(
               _lastUploadTime != null
-                  ? 'Last upload: ${DateFormat('MMM d, yyyy HH:mm').format(_lastUploadTime!)}'
-                  : 'No uploads yet',
+                  ? 'Last local upload package: ${DateFormat('MMM d, yyyy HH:mm').format(_lastUploadTime!)}'
+                  : 'No local upload packages yet',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey[600],
