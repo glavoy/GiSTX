@@ -201,12 +201,22 @@ class _QuestionViewState extends State<QuestionView> {
     final q = widget.question;
     final existing = widget.answers[q.fieldName];
 
+    // A stored special response (e.g. "-7" for "don't know") must not be seeded
+    // into the text box or used as a combobox selection.
+    final existingIsSpecial = existing != null &&
+        ((q.dontKnow != null && existing.toString() == q.dontKnow) ||
+            (q.refuse != null && existing.toString() == q.refuse));
+
     // Handle padding for fixed length numeric fields
-    String initialText = _normalizeValue(existing);
+    String initialText = existingIsSpecial ? '' : _normalizeValue(existing);
     final originalText = initialText;
 
-    // If there's a mask and it's a new record, initialize with prefix
-    if (q.type == QuestionType.text && initialText.isEmpty && q.mask != null) {
+    // If there's a mask and it's a new record, initialize with prefix.
+    // Skip when a special response is stored so we don't overwrite it below.
+    if (q.type == QuestionType.text &&
+        initialText.isEmpty &&
+        q.mask != null &&
+        !existingIsSpecial) {
       initialText = MaskedTextInputFormatter.getInitialPrefix(q.mask!);
     }
 
@@ -232,9 +242,12 @@ class _QuestionViewState extends State<QuestionView> {
     };
 
     // Convert existing value to string for radio/combobox
-    // This ensures consistency with option values from CSV/database
+    // This ensures consistency with option values from CSV/database.
+    // A special response is not a real combobox option, so leave it unselected.
     _radioSelection = existing != null ? _normalizeValue(existing) : null;
-    _comboboxSelection = existing != null ? _normalizeValue(existing) : null;
+    _comboboxSelection = (existing != null && !existingIsSpecial)
+        ? _normalizeValue(existing)
+        : null;
 
     // Handle date/datetime initialization
     if (existing is DateTime) {
@@ -382,14 +395,23 @@ class _QuestionViewState extends State<QuestionView> {
     // If we navigated to a different question, refresh local state
     if (oldWidget.question.fieldName != widget.question.fieldName) {
       final existing = widget.answers[widget.question.fieldName];
+      final q = widget.question;
+
+      // A stored special response must not be seeded into the text box or used
+      // as a combobox selection.
+      final existingIsSpecial = existing != null &&
+          ((q.dontKnow != null && existing.toString() == q.dontKnow) ||
+              (q.refuse != null && existing.toString() == q.refuse));
 
       // Reset text field
-      _textController.text = _normalizeValue(existing);
+      _textController.text = existingIsSpecial ? '' : _normalizeValue(existing);
 
       // Reset radio/checkbox/combobox selections
       // Convert to string to ensure consistency with option values
       _radioSelection = existing != null ? _normalizeValue(existing) : null;
-      _comboboxSelection = existing != null ? _normalizeValue(existing) : null;
+      _comboboxSelection = (existing != null && !existingIsSpecial)
+          ? _normalizeValue(existing)
+          : null;
       _checkboxSelection = {
         if (existing is List) ...existing.map((e) => _normalizeValue(e)),
       };
@@ -513,6 +535,14 @@ class _QuestionViewState extends State<QuestionView> {
       }
     }
 
+    // Track whether a special response (don't know / refuse) is active so the
+    // button highlight can be kept in sync as the user types.
+    final currentAnswer = widget.answers[q.fieldName]?.toString();
+    final hasSpecialResponse = currentAnswer != null &&
+        currentAnswer.isNotEmpty &&
+        ((q.dontKnow != null && currentAnswer == q.dontKnow) ||
+            (q.refuse != null && currentAnswer == q.refuse));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -536,9 +566,16 @@ class _QuestionViewState extends State<QuestionView> {
             final old = widget.answers[q.fieldName];
             if (old == val) return;
             widget.answers[q.fieldName] = val;
+            // If a special response was active, clear its highlight now that the
+            // user has typed a real value.
+            if (hasSpecialResponse) {
+              setState(() {});
+            }
             widget.onAnswerChanged?.call(q.fieldName, old, val);
           },
         ),
+        _buildSpecialResponseButtons(q,
+            clearLocal: () => _textController.clear()),
       ],
     );
   }
@@ -762,8 +799,21 @@ class _QuestionViewState extends State<QuestionView> {
   }
 
   Widget _buildCombobox(Question q) {
-    // Use dynamic options if available, otherwise use static options
-    final options = _dynamicOptions.isNotEmpty ? _dynamicOptions : q.options;
+    // Use dynamic options if available, otherwise use static options.
+    // Special responses (don't know / refuse) are shown as buttons below the
+    // dropdown, so filter them out of the dropdown items themselves.
+    final options = (_dynamicOptions.isNotEmpty ? _dynamicOptions : q.options)
+        .where((o) => o.value != q.dontKnow && o.value != q.refuse)
+        .toList();
+
+    // If the current answer is a special response, the dropdown must not try to
+    // select it (its value isn't in the item list).
+    final currentAnswer = widget.answers[q.fieldName]?.toString();
+    final hasSpecialResponse = currentAnswer != null &&
+        currentAnswer.isNotEmpty &&
+        ((q.dontKnow != null && currentAnswer == q.dontKnow) ||
+            (q.refuse != null && currentAnswer == q.refuse));
+    final dropdownValue = hasSpecialResponse ? null : _comboboxSelection;
 
     // Show empty message if no options and config has empty message
     if (options.isEmpty && q.responseConfig?.emptyMessage != null) {
@@ -794,7 +844,7 @@ class _QuestionViewState extends State<QuestionView> {
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: DropdownButton<String>(
-            value: _comboboxSelection,
+            value: dropdownValue,
             hint: const Text('Select an option'),
             isExpanded: true,
             underline: const SizedBox(),
@@ -821,6 +871,8 @@ class _QuestionViewState extends State<QuestionView> {
             },
           ),
         ),
+        _buildSpecialResponseButtons(q,
+            clearLocal: () => _comboboxSelection = null),
       ],
     );
   }
@@ -913,93 +965,76 @@ class _QuestionViewState extends State<QuestionView> {
           ),
         ),
         // Special response buttons for date fields
-        if (q.dontKnow != null || q.refuse != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Row(
-              children: [
-                if (q.dontKnow != null)
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        final old = widget.answers[q.fieldName];
-                        setState(() {
-                          _selectedDate = null;
-                          widget.answers[q.fieldName] = q.dontKnow;
-                        });
-                        widget.onAnswerChanged
-                            ?.call(q.fieldName, old, q.dontKnow);
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        backgroundColor:
-                            isDontKnow ? Colors.orange.shade50 : null,
-                        side: BorderSide(
-                          color: isDontKnow
-                              ? Colors.orange.shade700
-                              : Colors.grey.shade400,
-                          width: isDontKnow ? 2 : 1,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        "Don't know",
-                        style: TextStyle(
-                          color: isDontKnow
-                              ? Colors.orange.shade700
-                              : Colors.grey.shade700,
-                          fontWeight:
-                              isDontKnow ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                  ),
-                if (q.dontKnow != null && q.refuse != null)
-                  const SizedBox(width: 12),
-                if (q.refuse != null)
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        final old = widget.answers[q.fieldName];
-                        setState(() {
-                          _selectedDate = null;
-                          widget.answers[q.fieldName] = q.refuse;
-                        });
-                        widget.onAnswerChanged
-                            ?.call(q.fieldName, old, q.refuse);
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        backgroundColor:
-                            isRefuse ? Colors.orange.shade50 : null,
-                        side: BorderSide(
-                          color: isRefuse
-                              ? Colors.orange.shade700
-                              : Colors.grey.shade400,
-                          width: isRefuse ? 2 : 1,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        'Refuse',
-                        style: TextStyle(
-                          color: isRefuse
-                              ? Colors.orange.shade700
-                              : Colors.grey.shade700,
-                          fontWeight:
-                              isRefuse ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+        _buildSpecialResponseButtons(q, clearLocal: () => _selectedDate = null),
+      ],
+    );
+  }
+
+  /// Builds the "Don't know" / "Refuse" special-response buttons shared by the
+  /// date, text, and combobox question types. [clearLocal] resets the calling
+  /// type's local widget state (e.g. clears the date or text controller) when a
+  /// special response is selected.
+  Widget _buildSpecialResponseButtons(Question q,
+      {required VoidCallback clearLocal}) {
+    if (q.dontKnow == null && q.refuse == null) {
+      return const SizedBox.shrink();
+    }
+
+    final currentAnswer = widget.answers[q.fieldName]?.toString();
+    final isDontKnow = currentAnswer != null &&
+        currentAnswer.isNotEmpty &&
+        q.dontKnow != null &&
+        currentAnswer == q.dontKnow;
+    final isRefuse = currentAnswer != null &&
+        currentAnswer.isNotEmpty &&
+        q.refuse != null &&
+        currentAnswer == q.refuse;
+
+    Widget buildButton(String label, String value, bool isActive) {
+      return Expanded(
+        child: OutlinedButton(
+          onPressed: () {
+            final old = widget.answers[q.fieldName];
+            setState(() {
+              clearLocal();
+              widget.answers[q.fieldName] = value;
+            });
+            widget.onAnswerChanged?.call(q.fieldName, old, value);
+          },
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            backgroundColor: isActive ? Colors.orange.shade50 : null,
+            side: BorderSide(
+              color: isActive ? Colors.orange.shade700 : Colors.grey.shade400,
+              width: isActive ? 2 : 1,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
             ),
           ),
-      ],
+          child: Text(
+            label,
+            style: TextStyle(
+              color:
+                  isActive ? Colors.orange.shade700 : Colors.grey.shade700,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        children: [
+          if (q.dontKnow != null)
+            buildButton("Don't know", q.dontKnow!, isDontKnow),
+          if (q.dontKnow != null && q.refuse != null)
+            const SizedBox(width: 12),
+          if (q.refuse != null) buildButton('Refuse', q.refuse!, isRefuse),
+        ],
+      ),
     );
   }
 
