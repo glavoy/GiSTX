@@ -828,6 +828,13 @@ class _SurveyScreenState extends State<SurveyScreen> {
     if (q.type == QuestionType.text) {
       final raw = _answers[q.fieldName]?.toString() ?? '';
 
+      // Special responses (don't know / refuse) bypass format/length/numeric checks
+      if (raw.isNotEmpty &&
+          ((q.dontKnow != null && raw == q.dontKnow) ||
+              (q.refuse != null && raw == q.refuse))) {
+        return true;
+      }
+
       // Strict length check
       if (q.fixedLength && q.maxCharacters != null) {
         if (raw.length != q.maxCharacters) return false;

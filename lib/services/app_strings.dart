@@ -5,6 +5,10 @@ class AppStrings {
   // ── Common ───────────────────────────────────────────────────────────────
   String get error => isFrench ? 'Erreur' : 'Error';
 
+  // ── Special responses ──────────────────────────────────────────────────────
+  String get dontKnow => isFrench ? 'Ne sait pas' : "Don't know";
+  String get refuse => isFrench ? 'Refuse de répondre' : 'Refuse';
+
   // ── Main Screen ──────────────────────────────────────────────────────────
   String get currentProject => isFrench ? 'PROJET ACTUEL' : 'CURRENT PROJECT';
   String get newSurvey => isFrench ? 'Nouveau Questionnaire' : 'New Survey';
