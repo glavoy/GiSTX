@@ -1,3 +1,30 @@
+## [1.0.2] - 2026-06-22
+
+### Added
+- **Special responses for text & combobox questions:** "Don't know" and "Refuse" buttons are now available on `text` and `combobox` questions, matching the existing behaviour for `radio`, `checkbox`, and `date` types. Selecting one records the configured value (e.g. `-7`) and bypasses the field's format, length, mask, and numeric-range validation.
+- **Display fields on linked-survey selection:** When selecting a child/sister survey, the parent-record selector now shows the configured `display_fields`, making records easier to identify.
+
+### Fixed
+- **Logic checks with negative/decimal values:** Logic-check conditions now accept signed and decimal numeric literals (e.g. `cattle = -7`). Previously these threw an "Invalid condition format" error.
+- **Numeric range vs. special responses:** Selecting a special response (e.g. "Don't know") on an integer field that has a min/max range no longer blocks navigation with a range error.
+
+### Changed
+- **Build tooling:** Upgraded Gradle, the Android Gradle Plugin, and Kotlin; removed the deprecated `kotlin-android` plugin.
+
+### Housekeeping
+- Stopped tracking the contents of the `tmp/` working folder.
+
+## [1.0.0] - 2026-06-12
+
+First stable 1.0 release.
+
+### Added
+- **Desktop builds:** Added macOS build support and a macOS/Linux `SharedPreferences` fallback.
+- **Release signing:** Release builds are now signed from `key.properties`.
+
+### Fixed
+- **Upload verification:** FTP uploads are now verified before being reported as successful, preventing false "upload succeeded" results.
+
 ## [0.0.10] - 2026-02-05
 
 ### Fixed
