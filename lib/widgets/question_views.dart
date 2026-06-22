@@ -854,7 +854,7 @@ class _QuestionViewState extends State<QuestionView> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: DropdownButton<String>(
             value: dropdownValue,
-            hint: const Text('Select an option'),
+            hint: Text(_s.selectAnOption),
             isExpanded: true,
             underline: const SizedBox(),
             style: TextStyle(
@@ -954,10 +954,10 @@ class _QuestionViewState extends State<QuestionView> {
               children: [
                 Text(
                   hasSpecialResponse
-                      ? (isDontKnow ? "Don't know" : 'Refuse')
+                      ? (isDontKnow ? _s.dontKnow : _s.refuse)
                       : (_selectedDate != null
                           ? '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}'
-                          : 'Select a date'),
+                          : _s.selectADate),
                   style: TextStyle(
                     fontSize: 16,
                     color: hasSpecialResponse
@@ -1098,7 +1098,7 @@ class _QuestionViewState extends State<QuestionView> {
                 Text(
                   _selectedDateTime != null
                       ? '${_selectedDateTime!.year}-${_selectedDateTime!.month.toString().padLeft(2, '0')}-${_selectedDateTime!.day.toString().padLeft(2, '0')} ${_selectedDateTime!.hour.toString().padLeft(2, '0')}:${_selectedDateTime!.minute.toString().padLeft(2, '0')}'
-                      : 'Select date and time',
+                      : _s.selectDateAndTime,
                   style: TextStyle(
                     fontSize: 16,
                     color:

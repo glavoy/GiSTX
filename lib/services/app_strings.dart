@@ -9,6 +9,14 @@ class AppStrings {
   String get dontKnow => isFrench ? 'Ne sait pas' : "Don't know";
   String get refuse => isFrench ? 'Refuse de répondre' : 'Refuse';
 
+  // ── Question input placeholders ────────────────────────────────────────────
+  String get selectAnOption =>
+      isFrench ? 'Sélectionner une option' : 'Select an option';
+  String get selectADate =>
+      isFrench ? 'Sélectionner une date' : 'Select a date';
+  String get selectDateAndTime =>
+      isFrench ? 'Sélectionner la date et l\'heure' : 'Select date and time';
+
   // ── Main Screen ──────────────────────────────────────────────────────────
   String get currentProject => isFrench ? 'PROJET ACTUEL' : 'CURRENT PROJECT';
   String get newSurvey => isFrench ? 'Nouveau Questionnaire' : 'New Survey';
@@ -207,6 +215,18 @@ class AppStrings {
   String get selectQuestionnaireToModifyInstruction => isFrench
       ? 'Sélectionnez le questionnaire à modifier:'
       : 'Select the questionnaire you want to modify:';
+  String get noSurveySelectedConfigure => isFrench
+      ? "Aucun projet sélectionné. Veuillez d'abord configurer les paramètres."
+      : 'No survey selected. Please configure settings first.';
+  String get noXmlFilesInManifest => isFrench
+      ? 'Aucun fichier XML défini dans le manifeste du questionnaire.'
+      : 'No XML files defined in survey manifest';
+  String noQuestionnairesForSurvey(String surveyId) => isFrench
+      ? 'Aucun questionnaire trouvé pour le projet: $surveyId'
+      : 'No questionnaires found for survey: $surveyId';
+  String errorLoadingQuestionnaires(Object e) => isFrench
+      ? 'Erreur lors du chargement des questionnaires: $e'
+      : 'Error loading questionnaires: $e';
 
   // ── Record Selector ───────────────────────────────────────────────────────
   String get selectRecord =>
