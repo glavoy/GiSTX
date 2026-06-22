@@ -513,7 +513,15 @@ class _SurveyScreenState extends State<SurveyScreen> {
           }
         }
 
-        if (_logicError == null && q.numericCheck != null && raw.isNotEmpty) {
+        // Special responses (don't know / refuse) bypass the numeric range check
+        final isSpecialResponse = raw.isNotEmpty &&
+            ((q.dontKnow != null && raw == q.dontKnow) ||
+                (q.refuse != null && raw == q.refuse));
+
+        if (_logicError == null &&
+            q.numericCheck != null &&
+            raw.isNotEmpty &&
+            !isSpecialResponse) {
           final parsed = num.tryParse(raw);
           if (parsed != null) {
             final nc = q.numericCheck!;
