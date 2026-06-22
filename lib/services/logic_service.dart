@@ -191,9 +191,11 @@ class LogicService {
     }
 
     // Regex to capture: (field_name) (operator) (value)
-    // The value can be a quoted string (with any characters), or a field name.
+    // The value can be a quoted string (with any characters), a numeric literal
+    // (including negatives like -7 and decimals), or a field name.
     // Handles operators like =, <>, <=, >=, <, >
-    final regex = RegExp(r"^\s*([\w_]+)\s*([<>=!]+)\s*('[^']+'|[\w_]+)\s*$");
+    final regex = RegExp(
+        r"^\s*([\w_]+)\s*([<>=!]+)\s*('[^']+'|-?\d+(?:\.\d+)?|[\w_]+)\s*$");
     final match = regex.firstMatch(condition);
 
     if (match == null) {
