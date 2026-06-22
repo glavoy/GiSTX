@@ -1,4 +1,4 @@
-## [1.0.2] - 2026-06-22
+## [1.0.2+1] - 2026-06-22
 
 ### Added
 - **Special responses for text & combobox questions:** "Don't know" and "Refuse" buttons are now available on `text` and `combobox` questions, matching the existing behaviour for `radio`, `checkbox`, and `date` types. Selecting one records the configured value (e.g. `-7`) and bypasses the field's format, length, mask, and numeric-range validation.
@@ -10,7 +10,7 @@
 ### Changed
 - **French localization:** Localized the remaining hardcoded English UI strings to French — combobox/date/date-time placeholders, the special-response button labels ("Ne sait pas" / "Refuse de répondre"), and the questionnaire-selector error messages. Wording follows the selected country.
 
-## [1.0.1] - 2026-06-16
+## [1.0.1+1] - 2026-06-16
 
 ### Changed
 - **Display fields on linked-survey selection:** When selecting a child/sister survey, the parent-record selector now shows the configured `display_fields`, making records easier to identify.
@@ -19,7 +19,7 @@
 ### Housekeeping
 - Stopped tracking the contents of the `tmp/` working folder.
 
-## [1.0.0] - 2026-06-12
+## [1.0.0+1] - 2026-06-12
 
 First stable 1.0 release.
 
