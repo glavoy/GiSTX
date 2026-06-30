@@ -6,11 +6,11 @@ import '../services/survey_loader.dart';
 import '../widgets/question_views.dart';
 import '../services/db_service.dart';
 import '../services/auto_fields.dart';
-import '../services/skip_service.dart';
 import '../config/app_config.dart';
 import '../services/id_generator.dart';
 import '../services/logic_service.dart';
 import '../services/survey_config_service.dart';
+import '../services/survey_navigation_service.dart';
 import '../services/csv_data_service.dart';
 import '../services/change_summary_service.dart';
 import '../services/settings_service.dart';
@@ -433,42 +433,6 @@ class _SurveyScreenState extends State<SurveyScreen> {
     }
   }
 
-  /// Clear answers for questions in a specific range (used when skip logic jumps forward)
-  /// This clears data for questions that are being skipped over during forward navigation
-  /// Example: User changes hib_doses_received from 3 to 2, then navigates forward
-  /// Questions for dose 3 should be cleared immediately
-  void _clearAnswersInRange(List<Question> questions, int startIndex, int endIndex) {
-    final primaryKeys =
-        widget.primaryKeyFields?.map((f) => f.toLowerCase()).toSet() ?? {};
-
-    final clearedFields = <String>[];
-
-    for (int i = startIndex; i < endIndex && i < questions.length; i++) {
-      final q = questions[i];
-
-      // Skip automatic and information questions
-      if (q.type == QuestionType.automatic || q.type == QuestionType.information) {
-        continue;
-      }
-
-      // Don't clear primary key fields
-      if (primaryKeys.contains(q.fieldName.toLowerCase())) {
-        continue;
-      }
-
-      // Clear the answer if it exists
-      if (_answers.containsKey(q.fieldName) && _answers[q.fieldName] != null) {
-        debugPrint('Clearing skipped question: ${q.fieldName}');
-        _answers[q.fieldName] = null;
-        clearedFields.add(q.fieldName);
-      }
-    }
-
-    if (clearedFields.isNotEmpty) {
-      debugPrint('Cleared ${clearedFields.length} answers for skipped questions: ${clearedFields.join(", ")}');
-    }
-  }
-
   /// Called whenever an answer changes
   void _onAnswerChanged(String fieldName, dynamic oldValue, dynamic newValue) {
     if (_loadedQuestions == null || !mounted) return;
@@ -647,41 +611,20 @@ class _SurveyScreenState extends State<SurveyScreen> {
       }
     }
 
-    // Store the current question index before moving forward
-    final previousQuestionIndex = _currentQuestion;
-
     // Push current displayed question to history (skip automatic)
     if (qs[_currentQuestion].type != QuestionType.automatic) {
       _history.add(_currentQuestion);
       // history keeps track of previous questions implicitly
     }
 
-    // Check for postskip conditions on the current question
-    final postSkipTarget =
-        SkipService.evaluateSkips(currentQ.postSkips, _answers);
-
-    int nextIndex;
-    if (postSkipTarget != null) {
-      // Postskip condition met - find the target question
-      nextIndex = _findQuestionByFieldName(qs, postSkipTarget);
-      if (nextIndex == -1) {
-        // Target not found, go to next question normally
-        nextIndex = _currentQuestion + 1;
-      }
-    } else {
-      // No postskip, move to next question
-      nextIndex = _currentQuestion + 1;
-    }
-
-    // Skip automatic questions and evaluate preskips
-    nextIndex = await _findNextDisplayedQuestion(qs, nextIndex);
-
-    // CRITICAL FIX: Clear answers for any questions between previous and next that will be skipped
-    // This handles cases where changing an answer causes skip logic to bypass previously answered questions
-    // Example: changing hib_doses_received from 3 to 2 should clear hib_dose3_date
-    if (nextIndex > previousQuestionIndex + 1) {
-      _clearAnswersInRange(qs, previousQuestionIndex + 1, nextIndex);
-    }
+    final nextIndex = await SurveyNavigationService.advanceFromQuestion(
+      questions: qs,
+      currentIndex: _currentQuestion,
+      answers: _answers,
+      processAutomaticQuestion: _processAutomaticQuestion,
+      primaryKeyFields: widget.primaryKeyFields ?? const [],
+      isEditMode: widget.uniqueId != null,
+    );
 
     setState(() {
       _currentQuestion = nextIndex;
@@ -705,51 +648,6 @@ class _SurveyScreenState extends State<SurveyScreen> {
     // }
   }
 
-  /// Find the next question that should be displayed
-  /// Handles automatic questions and preskip conditions
-  Future<int> _findNextDisplayedQuestion(
-      List<Question> qs, int startIndex) async {
-    int index = startIndex;
-
-    while (index < qs.length) {
-      final q = qs[index];
-
-      // Process and skip automatic questions
-      if (q.type == QuestionType.automatic) {
-        await _processAutomaticQuestion(q);
-        index++;
-        continue;
-      }
-
-      // Skip primary key questions in edit mode
-      if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) {
-        // CRITICAL FIX: Even if we skip DISPLAYING the primary key in edit mode,
-        // we MUST recalculate it because the user might have changed the fields that compose it
-        // (e.g. changing vcode should update hhid, so hhid_verif validation works)
-        await _processAutomaticQuestion(q);
-        index++;
-        continue;
-      }
-
-      // Check preskip conditions
-      final preSkipTarget = SkipService.evaluateSkips(q.preSkips, _answers);
-      if (preSkipTarget != null) {
-        // Preskip condition met - jump to target
-        final targetIndex = _findQuestionByFieldName(qs, preSkipTarget);
-        if (targetIndex != -1) {
-          index = targetIndex;
-          continue; // Re-evaluate the target question
-        }
-      }
-
-      // This question should be displayed
-      return index;
-    }
-
-    // Reached end of survey
-    return qs.length - 1;
-  }
-
   /// Check if a field name is a primary key field
   bool _isPrimaryKeyField(String fieldName) {
     if (widget.primaryKeyFields == null) return false;
@@ -763,16 +661,6 @@ class _SurveyScreenState extends State<SurveyScreen> {
       }
     }
     return false;
-  }
-
-  /// Find a question by its fieldName
-  int _findQuestionByFieldName(List<Question> qs, String fieldName) {
-    for (int i = 0; i < qs.length; i++) {
-      if (qs[i].fieldName == fieldName) {
-        return i;
-      }
-    }
-    return -1; // Not found
   }
 
   /// Navigate to the previous displayed question
@@ -967,31 +855,14 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
   /// Skip to the first question that should be displayed
   Future<void> _skipToFirstDisplayedQuestion(List<Question> questions) async {
-    int index = 0;
-
-    // Find the first displayable question
-    while (index < questions.length) {
-      final q = questions[index];
-
-      // Process and skip automatic questions
-      if (q.type == QuestionType.automatic) {
-        await _processAutomaticQuestion(q);
-        index++;
-        continue;
-      }
-
-      // Skip primary key questions in edit mode
-      if (widget.uniqueId != null && _isPrimaryKeyField(q.fieldName)) {
-        debugPrint('Skipping primary key question on load: ${q.fieldName}');
-        // CRITICAL FIX: Recalculate PK even if hidden
-        await _processAutomaticQuestion(q);
-        index++;
-        continue;
-      }
-
-      // Found a displayable question
-      break;
-    }
+    final index = await SurveyNavigationService.findNextDisplayedQuestion(
+      questions: questions,
+      startIndex: 0,
+      answers: _answers,
+      processAutomaticQuestion: _processAutomaticQuestion,
+      primaryKeyFields: widget.primaryKeyFields ?? const [],
+      isEditMode: widget.uniqueId != null,
+    );
 
     if (index < questions.length && index != _currentQuestion) {
       setState(() {

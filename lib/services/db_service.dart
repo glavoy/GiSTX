@@ -622,26 +622,7 @@ class DbService {
 
     try {
       final existingColumns = await _getTableColumns(db, tableName);
-      final Map<String, dynamic> rowData = {};
-
-      for (final entry in answers.entries) {
-        final key = entry.key;
-        if (key.trim().isEmpty) continue; // Skip empty keys
-
-        final val = entry.value;
-
-        if (!existingColumns.contains(key.toLowerCase())) continue;
-
-        if (val == null) {
-          rowData[key] = null;
-        } else if (val is List) {
-          rowData[key] = val.map((e) => e.toString()).join(',');
-        } else if (val is DateTime) {
-          rowData[key] = val.toIso8601String();
-        } else {
-          rowData[key] = val;
-        }
-      }
+      final rowData = prepareUpdateRowData(answers, existingColumns);
 
       if (rowData.isEmpty) throw DatabaseException('No valid fields to update');
 
@@ -673,6 +654,41 @@ class DbService {
     } catch (e) {
       throw DatabaseException('Failed to update interview: $e');
     }
+  }
+
+  /// Converts answers to SQLite update values while retaining explicit nulls.
+  ///
+  /// Public to allow persistence behavior to be verified without initializing
+  /// the application's survey database registry.
+  @visibleForTesting
+  static Map<String, dynamic> prepareUpdateRowData(
+    AnswerMap answers,
+    Iterable<String> existingColumns,
+  ) {
+    final rowData = <String, dynamic>{};
+    final normalizedColumns =
+        existingColumns.map((column) => column.toLowerCase()).toSet();
+
+    for (final entry in answers.entries) {
+      final key = entry.key;
+      if (key.trim().isEmpty ||
+          !normalizedColumns.contains(key.toLowerCase())) {
+        continue;
+      }
+
+      final value = entry.value;
+      if (value == null) {
+        rowData[key] = null;
+      } else if (value is List) {
+        rowData[key] = value.map((item) => item.toString()).join(',');
+      } else if (value is DateTime) {
+        rowData[key] = value.toIso8601String();
+      } else {
+        rowData[key] = value;
+      }
+    }
+
+    return rowData;
   }
 
   static Future<void> _recordChanges({
