@@ -1,3 +1,12 @@
+## [1.0.3+2] - 2026-07-01
+
+### Fixed
+- **Stale answers after skip navigation:** Forward postskip and preskip jumps now clear answers for every bypassed question before processing automatic fields, including chained skip routes. Primary-key and protected fields remain intact.
+- **Cleared answers in modified surveys:** Answers cleared by skip logic are now written back to SQLite as `null`, preventing old values from remaining in saved records.
+
+### Changed
+- **macOS application icon:** Replaced the default Flutter icon with the GiSTX branding and configured repeatable macOS launcher-icon generation.
+
 ## [1.0.2] - 2026-06-22
 
 ### Added
