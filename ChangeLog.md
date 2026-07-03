@@ -1,3 +1,12 @@
+## [1.0.4-bf+3] - 2026-07-03
+
+### Fixed
+- **SFTP survey download hang:** Downloading a survey from the Burkina Faso server could hang indefinitely. An untracked `pubspec.lock` had silently picked up a `dartssh2` release that rewrote the SSH transport's internals; pinned back to the previously known-good `2.18.0`. Also added a 2-minute timeout to the SFTP download as a safety net against future stalls.
+
+### Housekeeping
+- **`pubspec.lock` now tracked in git:** A blanket `*.lock` rule in `.gitignore` was unintentionally excluding it, so dependency versions could drift between machines/builds without anyone noticing.
+- **Fixed the version-bump tool:** `tool/update_version.dart` crashed on this branch's `-bf` version suffix and, even on plain versions, silently dropped the build number instead of incrementing it.
+
 ## [1.0.3-bf+2] - 2026-07-01
 
 ### Fixed
