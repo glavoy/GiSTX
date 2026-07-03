@@ -1,3 +1,12 @@
+## [1.0.4+3] - 2026-07-03
+
+### Fixed
+- **Survey download timeout:** Added a 2-minute timeout to the FTP survey zip download, so a stalled connection now fails clearly instead of hanging indefinitely.
+
+### Housekeeping
+- **`pubspec.lock` now tracked in git:** A blanket `*.lock` rule in `.gitignore` was unintentionally excluding it, so dependency versions could drift between machines/builds without anyone noticing.
+- **Fixed the version-bump tool:** `tool/update_version.dart` was silently dropping the build number instead of incrementing it.
+
 ## [1.0.3+2] - 2026-07-01
 
 ### Fixed
