@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:ftpconnect/ftpconnect.dart';
@@ -54,6 +55,7 @@ class FtpUploadResult {
 class FtpService {
   static const String _host = '0f7a55b.netsolhost.com';
   static const String _uploadDirectory = '/data';
+  static const _downloadTimeout = Duration(minutes: 2);
   FTPConnect? _ftpConnect;
 
   /// Connect to the FTP server
@@ -118,8 +120,14 @@ class FtpService {
       // Ensure we are in the right directory on server
       await _ftpConnect!.changeDirectory('survey');
 
-      await _ftpConnect!.downloadFile(filename, localFile);
+      await _ftpConnect!
+          .downloadFile(filename, localFile)
+          .timeout(_downloadTimeout);
       return localFile;
+    } on TimeoutException {
+      debugPrint(
+          '[FtpService] Download timed out after $_downloadTimeout: $filename');
+      return null;
     } catch (e) {
       debugPrint('[FtpService] Download failed: $e');
       return null;
