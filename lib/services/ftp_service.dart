@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:ftpconnect/ftpconnect.dart';
@@ -54,6 +55,9 @@ class FtpUploadResult {
 }
 
 class FtpService {
+  static const _downloadTimeout = Duration(minutes: 2);
+
+
   // FTP connection (Uganda)
   FTPConnect? _ftpConnect;
   // SFTP connection (Burkina Faso)
@@ -177,12 +181,14 @@ class FtpService {
       try {
         final remotePath =
             _pathPrefix.isEmpty ? '/survey/$filename' : '/$_pathPrefix/survey/$filename';
-        final remoteFile =
-            await _sftpClient!.open(remotePath, mode: SftpFileOpenMode.read);
-        final bytes = await remoteFile.readBytes();
-        await remoteFile.close();
+        final bytes = await _sftpDownloadBytes(remotePath)
+            .timeout(_downloadTimeout);
         await localFile.writeAsBytes(bytes);
         return localFile;
+      } on TimeoutException {
+        debugPrint(
+            '[FtpService] SFTP download timed out after $_downloadTimeout: $filename');
+        return null;
       } catch (e) {
         debugPrint('[FtpService] SFTP download failed: $e');
         return null;
@@ -292,6 +298,16 @@ class FtpService {
         remoteBytes: null,
         message: e.toString(),
       );
+    }
+  }
+
+  Future<Uint8List> _sftpDownloadBytes(String remotePath) async {
+    final remoteFile =
+        await _sftpClient!.open(remotePath, mode: SftpFileOpenMode.read);
+    try {
+      return await remoteFile.readBytes();
+    } finally {
+      await remoteFile.close();
     }
   }
 
