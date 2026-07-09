@@ -7,7 +7,7 @@ class AppStrings {
 
   // ── Special responses ──────────────────────────────────────────────────────
   String get dontKnow => isFrench ? 'Ne sait pas' : "Don't know";
-  String get refuse => isFrench ? 'Refuse de répondre' : 'Refuse';
+  String get refuse => isFrench ? 'Refuse de répondre' : 'Refuse to answer';
 
   // ── Question input placeholders ────────────────────────────────────────────
   String get selectAnOption =>

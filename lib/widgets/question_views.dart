@@ -479,7 +479,9 @@ class _QuestionViewState extends State<QuestionView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if ((q.text ?? '').isNotEmpty)
-          _buildSectionTitle(isWarning ? (_s.isFrench ? 'Avertissement' : 'Warning') : 'Information'),
+          _buildSectionTitle(isWarning
+              ? (_s.isFrench ? 'Avertissement' : 'Warning')
+              : 'Information'),
         Container(
           decoration: BoxDecoration(
             color: isWarning
@@ -569,7 +571,8 @@ class _QuestionViewState extends State<QuestionView> {
               isIntegerField ? TextInputType.number : TextInputType.text,
           inputFormatters: formatters,
           decoration: InputDecoration(
-            hintText: _s.isFrench ? 'Saisissez votre réponse' : 'Type your answer',
+            hintText:
+                _s.isFrench ? 'Saisissez votre réponse' : 'Type your answer',
           ),
           onChanged: (val) {
             final old = widget.answers[q.fieldName];
@@ -587,6 +590,17 @@ class _QuestionViewState extends State<QuestionView> {
             clearLocal: () => _textController.clear()),
       ],
     );
+  }
+
+  String _specialResponseLabel(Question q, QuestionOption opt) {
+    final dontKnowValue = q.responseConfig?.dontKnowValue ?? q.dontKnow;
+    if (dontKnowValue != null && opt.value == dontKnowValue) {
+      return _s.dontKnow;
+    }
+    if (q.refuse != null && opt.value == q.refuse) {
+      return _s.refuse;
+    }
+    return opt.label;
   }
 
   Widget _buildRadio(Question q) {
@@ -635,7 +649,10 @@ class _QuestionViewState extends State<QuestionView> {
             children: options.map(
               (opt) {
                 // Check if this is a special response option
-                final isDontKnow = q.dontKnow != null && opt.value == q.dontKnow;
+                final dontKnowValue =
+                    q.responseConfig?.dontKnowValue ?? q.dontKnow;
+                final isDontKnow =
+                    dontKnowValue != null && opt.value == dontKnowValue;
                 final isRefuse = q.refuse != null && opt.value == q.refuse;
                 final isSpecial = isDontKnow || isRefuse;
 
@@ -644,7 +661,7 @@ class _QuestionViewState extends State<QuestionView> {
                     builder: (context) => RadioListTile<String>(
                       value: opt.value,
                       title: Text(
-                        opt.label,
+                        _specialResponseLabel(q, opt),
                         style: TextStyle(
                           color: Theme.of(context).brightness == Brightness.dark
                               ? Colors.black87
@@ -735,7 +752,7 @@ class _QuestionViewState extends State<QuestionView> {
               value: checked,
               dense: true,
               title: Text(
-                opt.label,
+                _specialResponseLabel(q, opt),
                 style: TextStyle(
                   color: Theme.of(context).brightness == Brightness.dark
                       ? Colors.black87
@@ -1024,8 +1041,7 @@ class _QuestionViewState extends State<QuestionView> {
           child: Text(
             label,
             style: TextStyle(
-              color:
-                  isActive ? Colors.orange.shade700 : Colors.grey.shade700,
+              color: isActive ? Colors.orange.shade700 : Colors.grey.shade700,
               fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
@@ -1039,8 +1055,7 @@ class _QuestionViewState extends State<QuestionView> {
         children: [
           if (q.dontKnow != null)
             buildButton(_s.dontKnow, q.dontKnow!, isDontKnow),
-          if (q.dontKnow != null && q.refuse != null)
-            const SizedBox(width: 12),
+          if (q.dontKnow != null && q.refuse != null) const SizedBox(width: 12),
           if (q.refuse != null) buildButton(_s.refuse, q.refuse!, isRefuse),
         ],
       ),
