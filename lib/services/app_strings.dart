@@ -270,10 +270,10 @@ class AppStrings {
   // ── Parent ID Selector ────────────────────────────────────────────────────
   String noEligibleIds(String field, String table, String? condition) => isFrench
       ? 'Aucun $field éligible trouvé dans la table $table.\n\n'
-          '${condition != null ? "Remarque: Seuls les enregistrements correspondant à \'$condition\' sont affichés.\n\n" : ""}'
+          '${condition != null ? "Remarque: Seuls les enregistrements éligibles pour ce questionnaire sont affichés.\n\n" : ""}'
           'Veuillez d\'abord compléter un questionnaire $table.'
       : 'No eligible $field found in $table table.\n\n'
-          '${condition != null ? "Note: Only records matching \'$condition\' are shown.\n\n" : ""}'
+          '${condition != null ? "Note: Only records eligible for this questionnaire are shown.\n\n" : ""}'
           'Please complete a $table questionnaire first.';
   String errorLoadingIds(Object e) =>
       isFrench ? 'Erreur de chargement des IDs: $e' : 'Error loading IDs: $e';
