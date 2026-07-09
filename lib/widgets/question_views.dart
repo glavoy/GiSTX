@@ -626,7 +626,8 @@ class _QuestionViewState extends State<QuestionView> {
             children: options.map(
               (opt) {
                 // Check if this is a special response option
-                final isDontKnow = q.dontKnow != null && opt.value == q.dontKnow;
+                final isDontKnow =
+                    q.dontKnow != null && opt.value == q.dontKnow;
                 final isRefuse = q.refuse != null && opt.value == q.refuse;
                 final isSpecial = isDontKnow || isRefuse;
 
@@ -945,7 +946,7 @@ class _QuestionViewState extends State<QuestionView> {
               children: [
                 Text(
                   hasSpecialResponse
-                      ? (isDontKnow ? "Don't know" : 'Refuse')
+                      ? (isDontKnow ? "Don't know" : 'Refuse to answer')
                       : (_selectedDate != null
                           ? '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}'
                           : 'Select a date'),
@@ -1015,8 +1016,7 @@ class _QuestionViewState extends State<QuestionView> {
           child: Text(
             label,
             style: TextStyle(
-              color:
-                  isActive ? Colors.orange.shade700 : Colors.grey.shade700,
+              color: isActive ? Colors.orange.shade700 : Colors.grey.shade700,
               fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
@@ -1030,9 +1030,9 @@ class _QuestionViewState extends State<QuestionView> {
         children: [
           if (q.dontKnow != null)
             buildButton("Don't know", q.dontKnow!, isDontKnow),
-          if (q.dontKnow != null && q.refuse != null)
-            const SizedBox(width: 12),
-          if (q.refuse != null) buildButton('Refuse', q.refuse!, isRefuse),
+          if (q.dontKnow != null && q.refuse != null) const SizedBox(width: 12),
+          if (q.refuse != null)
+            buildButton('Refuse to answer', q.refuse!, isRefuse),
         ],
       ),
     );
