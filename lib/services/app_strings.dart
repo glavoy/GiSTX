@@ -311,6 +311,9 @@ class AppStrings {
       ? 'Un enregistrement avec cet ID existe déjà. Veuillez entrer un ID unique.'
       : 'A record with this ID already exists. Please enter a unique ID.';
   String get ok => 'OK';
+  String get incompleteDecimalValue => isFrench
+      ? 'Veuillez entrer un chiffre après le séparateur décimal.'
+      : 'Please enter a digit after the decimal separator.';
   String get noChanges => isFrench ? 'Aucune Modification' : 'No Changes';
   String get noChangesMessage => isFrench
       ? "Aucune modification n'a été apportée à cet enregistrement."

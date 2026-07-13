@@ -15,6 +15,7 @@ import '../services/csv_data_service.dart';
 import '../services/change_summary_service.dart';
 import '../services/settings_service.dart';
 import '../services/app_strings.dart';
+import '../services/numeric_validation_service.dart';
 
 class SurveyScreen extends StatefulWidget {
   final String questionnaireFilename;
@@ -486,6 +487,11 @@ class _SurveyScreenState extends State<SurveyScreen> {
             q.numericCheck != null &&
             raw.isNotEmpty &&
             !isSpecialResponse) {
+          if (NumericValidationService.hasTrailingDecimalSeparator(raw)) {
+            _logicError = _s.incompleteDecimalValue;
+            return;
+          }
+
           final parsed = num.tryParse(raw);
           if (parsed != null) {
             final nc = q.numericCheck!;
@@ -738,6 +744,9 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
       if (q.numericCheck != null) {
         if (raw.isEmpty) return false;
+        if (NumericValidationService.hasTrailingDecimalSeparator(raw)) {
+          return false;
+        }
 
         final parsed = num.tryParse(raw);
         if (parsed == null) return false;
