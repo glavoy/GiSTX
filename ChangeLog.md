@@ -1,3 +1,9 @@
+## [1.0.5+4] - 2026-07-13
+
+### Fixed
+- **Vaccine coverage participant message:** Fixed the message shown when there are no "Vaccine coverage" participants so it no longer displays the technical filter text `need_vac_cov=1`.
+- **Incomplete decimal validation:** Decimal numeric fields now require a digit after the decimal separator when a decimal is entered. Values such as `120.` are blocked, while whole numbers and completed decimals such as `120`, `120.0`, and `120.5` remain valid.
+
 ## [1.0.4+3] - 2026-07-03
 
 ### Fixed
