@@ -682,15 +682,7 @@ class _QuestionViewState extends State<QuestionView> {
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: isSpecial
-                      ? Align(
-                          alignment: Alignment.centerLeft,
-                          child: FractionallySizedBox(
-                            widthFactor: 0.5,
-                            child: radioTile,
-                          ),
-                        )
-                      : radioTile,
+                  child: radioTile,
                 );
               },
             ).toList(),
@@ -808,15 +800,7 @@ class _QuestionViewState extends State<QuestionView> {
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: isSpecial
-                  ? Align(
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: 0.5,
-                        child: checkboxTile,
-                      ),
-                    )
-                  : checkboxTile,
+              child: checkboxTile,
             );
           }).toList(),
         ),
