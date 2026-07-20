@@ -77,7 +77,7 @@ void main() {
     );
 
     expect(find.text("Don't know"), findsOneWidget);
-    expect(find.text('Refuse'), findsOneWidget);
+    expect(find.text('Refuse to answer'), findsOneWidget);
     expect(find.text('Ne sait pas'), findsNothing);
     expect(find.text('Refuse de répondre'), findsNothing);
   });
