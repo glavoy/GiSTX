@@ -24,6 +24,8 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
   late Future<RecordSelectorData> _dataFuture;
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, String?> _selectedValues = {};
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
   String? _errorMessage;
 
   @override
@@ -37,6 +39,7 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
     for (final controller in _controllers.values) {
       controller.dispose();
     }
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -107,6 +110,32 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
       debugPrint('Error loading data: $e');
       rethrow;
     }
+  }
+
+  /// Filters records by the current search query, matching against any
+  /// primary-key field value or resolved display_fields value (e.g. the
+  /// participant's name). Mirrors ParentIdSelectorScreen._filterIds.
+  List<Map<String, dynamic>> _searchFilteredRecords(RecordSelectorData data) {
+    if (_searchQuery.isEmpty) return data.records;
+
+    final query = _searchQuery.toLowerCase();
+    final questionCache = QuestionCacheService();
+
+    return data.records.where((record) {
+      final normalized = record.map((k, v) => MapEntry(k.toLowerCase(), v));
+
+      for (final field in data.primaryKeyFields) {
+        final value = normalized[field.toLowerCase()]?.toString() ?? '';
+        if (value.toLowerCase().contains(query)) return true;
+      }
+
+      for (final displayField in data.displayFields) {
+        final value = questionCache.getDisplayValue(displayField, record);
+        if (value.toLowerCase().contains(query)) return true;
+      }
+
+      return false;
+    }).toList();
   }
 
   /// Build unique options for a primary key field from all records
@@ -219,8 +248,9 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
       }
     }
 
-    // Get the filtered records based on selections
-    final filtered = _getFilteredRecords(data.records, data.primaryKeyFields);
+    // Get the filtered records based on the search box and field selections
+    final filtered = _getFilteredRecords(
+        _searchFilteredRecords(data), data.primaryKeyFields);
 
     if (filtered.isEmpty) {
       setState(() {
@@ -362,6 +392,8 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
                   );
                 }
 
+                final filteredRecords = _searchFilteredRecords(data);
+
                 return Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -382,19 +414,81 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
                                 'Found ${data.records.length} existing records',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
+                              if (_searchQuery.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${filteredRecords.length} matching record${filteredRecords.length == 1 ? '' : 's'}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: Colors.grey[600],
+                                      ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
                       ),
+                      const SizedBox(height: 16),
+
+                      // Search box
+                      TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search records...',
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchQuery = '';
+                                      _selectedValues.clear();
+                                      _errorMessage = null;
+                                    });
+                                  },
+                                )
+                              : null,
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            _searchQuery = value;
+                            // Clear selections - they may no longer be valid
+                            // for the filtered record pool.
+                            _selectedValues.clear();
+                            _errorMessage = null;
+                          });
+                        },
+                      ),
                       const SizedBox(height: 24),
 
-                      // Primary key field selectors
-                      ...data.primaryKeyFields.map((fieldName) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: _buildFieldSelector(data, fieldName),
-                        );
-                      }),
+                      if (filteredRecords.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          child: Center(
+                            child: Text(
+                              'No matching records found',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        // Primary key field selectors
+                        ...data.primaryKeyFields.map((fieldName) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: _buildFieldSelector(
+                                data, fieldName, filteredRecords),
+                          );
+                        }),
 
                       const SizedBox(height: 16),
 
@@ -424,17 +518,18 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
                         ),
 
                       // Load button
-                      FilledButton.icon(
-                        onPressed: () => _loadRecord(data),
-                        icon: const Icon(Icons.edit_note),
-                        label: const Text('View/Modify Survey'),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 16),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                      if (filteredRecords.isNotEmpty)
+                        FilledButton.icon(
+                          onPressed: () => _loadRecord(data),
+                          icon: const Icon(Icons.edit_note),
+                          label: const Text('View/Modify Survey'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 16),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 );
@@ -446,15 +541,17 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
     );
   }
 
-  Widget _buildFieldSelector(RecordSelectorData data, String fieldName) {
-    // Get available values for this field based on previous selections
-    final filteredRecords = _getFilteredRecords(
-      data.records,
+  Widget _buildFieldSelector(RecordSelectorData data, String fieldName,
+      List<Map<String, dynamic>> searchRecords) {
+    // Get available values for this field based on the search box and
+    // previous field selections
+    final fieldFilteredRecords = _getFilteredRecords(
+      searchRecords,
       data.primaryKeyFields
           .sublist(0, data.primaryKeyFields.indexOf(fieldName)),
     );
     final availableValues =
-        _getUniqueValuesForField(filteredRecords, fieldName);
+        _getUniqueValuesForField(fieldFilteredRecords, fieldName);
 
     // Auto-select if only one option exists and it's not already selected
     if (availableValues.length == 1 &&
@@ -496,7 +593,7 @@ class _RecordSelectorScreenState extends State<RecordSelectorScreen> {
                     child: Text(_buildDisplayText(
                       value: value,
                       fieldName: fieldName,
-                      records: filteredRecords,
+                      records: fieldFilteredRecords,
                       displayFields: data.displayFields,
                       primaryKeyFields: data.primaryKeyFields,
                     )),
