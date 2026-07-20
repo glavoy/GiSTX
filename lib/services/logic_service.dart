@@ -190,6 +190,16 @@ class LogicService {
       return _evaluateExpression(condition, answers);
     }
 
+    // Regex to capture: (field_name) contains|does not contain (value)
+    // Used for checkbox (multi-select) fields, whose answer is a List.
+    final containsRegex = RegExp(
+        r"^\s*([\w_]+)\s+(contains|does not contain)\s+('[^']+'|-?\d+(?:\.\d+)?|[\w_]+)\s*$",
+        caseSensitive: false);
+    final containsMatch = containsRegex.firstMatch(condition);
+    if (containsMatch != null) {
+      return _evaluateContainsCondition(containsMatch, answers);
+    }
+
     // Regex to capture: (field_name) (operator) (value)
     // The value can be a quoted string (with any characters), a numeric literal
     // (including negatives like -7 and decimals), or a field name.
@@ -239,6 +249,45 @@ class LogicService {
 
     final result = _compare(leftValue.toString(), rightValue.toString(), operator);
     debugPrint('[LogicService]   Result: $result');
+    return result;
+  }
+
+  /// Evaluates a "field contains 'value'" / "field does not contain 'value'" condition.
+  /// Used for checkbox (multi-select) fields, whose answer is stored as a List.
+  static bool _evaluateContainsCondition(RegExpMatch match, AnswerMap answers) {
+    final String fieldName = match.group(1)!.trim();
+    final String operatorWord = match.group(2)!.trim().toLowerCase();
+    String valueOrField = match.group(3)!.trim();
+
+    final dynamic leftValue = answers[fieldName];
+    if (leftValue == null) {
+      debugPrint('[LogicService]   Contains: left value is null, returning false.');
+      return false;
+    }
+
+    // Determine the value to search for (quoted literal, numeric literal, or another field)
+    String compareValue;
+    if (valueOrField.startsWith("'") && valueOrField.endsWith("'")) {
+      compareValue = valueOrField.substring(1, valueOrField.length - 1);
+    } else if (int.tryParse(valueOrField) != null ||
+        double.tryParse(valueOrField) != null) {
+      compareValue = valueOrField;
+    } else {
+      compareValue = answers[valueOrField]?.toString() ?? '';
+    }
+
+    // Checkbox answers are normally a List; fall back to a comma-separated string
+    // for any field that stores its values that way.
+    final List<String> list = leftValue is List
+        ? leftValue.map((e) => e.toString()).toList()
+        : leftValue.toString().split(',').map((s) => s.trim()).toList();
+
+    final bool contains = list.contains(compareValue);
+    final bool result =
+        operatorWord == 'contains' ? contains : !contains;
+
+    debugPrint(
+        '[LogicService]   Contains: $fieldName ($list) $operatorWord "$compareValue" --> $result');
     return result;
   }
 
