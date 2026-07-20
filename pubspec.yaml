@@ -1,6 +1,6 @@
 name: GiSTX
 description: Cross-platform Questionnaire software
-version: 1.0.5-bf+4
+version: 1.0.6-bf+5
 environment:
   sdk: '>=3.2.0 <4.0.0'
 
