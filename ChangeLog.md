@@ -1,3 +1,9 @@
+## [1.0.6+5] - 2026-07-20
+
+### Added
+- **Survey-record search:** Added search to the record selector when viewing or modifying a survey, making it quicker to find the correct existing record.
+- **Checkbox LogicCheck operators:** Logic checks now support `contains` and `does not contain` for checkbox and other multi-select values, allowing validation rules to test whether a selected-value list includes or excludes a specific response.
+
 ## [1.0.5+4] - 2026-07-13
 
 ### Fixed
