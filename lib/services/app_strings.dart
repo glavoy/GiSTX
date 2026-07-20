@@ -266,6 +266,14 @@ class AppStrings {
       : 'Record does not have a uniqueid field.';
   String selectFieldHint(String field) =>
       isFrench ? 'Sélectionner $field' : 'Select $field';
+  String get searchRecordsHint =>
+      isFrench ? 'Rechercher un enregistrement...' : 'Search records...';
+  String matchingRecordsCount(int count) => isFrench
+      ? '$count enregistrement${count == 1 ? '' : 's'} correspondant${count == 1 ? '' : 's'}'
+      : '$count matching record${count == 1 ? '' : 's'}';
+  String get noMatchingRecords => isFrench
+      ? 'Aucun enregistrement correspondant trouvé'
+      : 'No matching records found';
 
   // ── Parent ID Selector ────────────────────────────────────────────────────
   String noEligibleIds(String field, String table, String? condition) => isFrench
